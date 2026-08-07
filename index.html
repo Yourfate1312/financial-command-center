@@ -389,24 +389,16 @@
           <div class="sub">Banks + Crypto</div>
         </div>
         <div class="summary-cell">
-          <div class="label">Excluded (tracked separately)</div>
-          <div class="value" id="excluded-value">—</div>
-          <div class="sub">Trading + Credit Card</div>
-        </div>
-        <div class="summary-cell">
-          <div class="label">Accounts Linked</div>
-          <div class="value" id="account-count-value">—</div>
-          <div class="sub">Total records</div>
+          <div class="label">Accounts</div>
+          <div class="value" id="included-count-value">—</div>
+          <div class="sub">Counted toward net worth</div>
         </div>
       </div>
 
-      <div class="section-title">Counted Toward Net Worth</div>
+      <div class="section-title">Accounts</div>
       <div class="account-grid" id="included-accounts">
         <div class="loading-state">Loading accounts…</div>
       </div>
-
-      <div class="section-title">Tracked Separately (Not in Net Worth)</div>
-      <div class="account-grid" id="excluded-accounts"></div>
     </div>
   </div>
 </div>
@@ -467,11 +459,11 @@
 
   async function loadAccounts() {
     const includedEl = document.getElementById('included-accounts');
-    const excludedEl = document.getElementById('excluded-accounts');
 
     const { data: accounts, error } = await sb
       .from('accounts')
       .select('*')
+      .eq('include_in_net_worth', true)
       .order('created_at', { ascending: true });
 
     if (error) {
@@ -481,17 +473,11 @@
 
     if (!accounts || accounts.length === 0) {
       includedEl.innerHTML = `<div class="empty-state">No accounts yet.</div>`;
-      excludedEl.innerHTML = '';
       updateSummary([]);
       return;
     }
 
-    const included = accounts.filter(a => a.include_in_net_worth);
-    const excluded = accounts.filter(a => !a.include_in_net_worth);
-
-    includedEl.innerHTML = included.map(renderCard).join('') || `<div class="empty-state">None yet.</div>`;
-    excludedEl.innerHTML = excluded.map(renderCard).join('') || `<div class="empty-state">None yet.</div>`;
-
+    includedEl.innerHTML = accounts.map(renderCard).join('');
     updateSummary(accounts);
   }
 
@@ -511,17 +497,9 @@
   }
 
   function updateSummary(accounts) {
-    const netWorth = accounts
-      .filter(a => a.include_in_net_worth)
-      .reduce((sum, a) => sum + Number(a.balance), 0);
-
-    const excluded = accounts
-      .filter(a => !a.include_in_net_worth)
-      .reduce((sum, a) => sum + Number(a.balance), 0);
-
+    const netWorth = accounts.reduce((sum, a) => sum + Number(a.balance), 0);
     document.getElementById('net-worth-value').textContent = fmtINR(netWorth);
-    document.getElementById('excluded-value').textContent = fmtINR(excluded);
-    document.getElementById('account-count-value').textContent = accounts.length;
+    document.getElementById('included-count-value').textContent = accounts.length;
   }
 
   // Check for existing session on page load
