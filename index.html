@@ -205,9 +205,11 @@
     padding: 10px 24px;
     font-size: 13px;
     color: var(--text-dim);
-    cursor: default;
+    cursor: pointer;
     border-left: 2px solid transparent;
+    transition: all 0.15s;
   }
+  .nav-item:hover { color: var(--text); background: rgba(255,176,32,0.03); }
   .nav-item.active {
     color: var(--text);
     border-left-color: var(--amber);
@@ -447,8 +449,8 @@
   <div class="layout">
     <div class="sidebar">
       <div class="sidebar-label">Modules</div>
-      <div class="nav-item active">Accounts</div>
-      <div class="nav-item active">Transactions</div>
+      <div class="nav-item active" data-page="accounts">Accounts</div>
+      <div class="nav-item" data-page="transactions">Transactions</div>
       <div class="nav-item">Trading <span class="tag">soon</span></div>
       <div class="nav-item">Credit Cards <span class="tag">soon</span></div>
       <div class="nav-item">Gambling <span class="tag">soon</span></div>
@@ -458,66 +460,70 @@
     </div>
 
     <div class="main">
-      <div class="summary-row" id="summary-row">
-        <div class="summary-cell">
-          <div class="label">Net Worth</div>
-          <div class="value amber" id="net-worth-value">—</div>
-          <div class="sub">Banks + Crypto</div>
+      <div id="page-accounts" class="page">
+        <div class="summary-row" id="summary-row">
+          <div class="summary-cell">
+            <div class="label">Net Worth</div>
+            <div class="value amber" id="net-worth-value">—</div>
+            <div class="sub">Banks + Cash</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Accounts</div>
+            <div class="value" id="included-count-value">—</div>
+            <div class="sub">Counted toward net worth</div>
+          </div>
         </div>
-        <div class="summary-cell">
-          <div class="label">Accounts</div>
-          <div class="value" id="included-count-value">—</div>
-          <div class="sub">Counted toward net worth</div>
+
+        <div class="section-title">Accounts</div>
+        <div class="account-grid" id="included-accounts">
+          <div class="loading-state">Loading accounts…</div>
         </div>
       </div>
 
-      <div class="section-title">Accounts</div>
-      <div class="account-grid" id="included-accounts">
-        <div class="loading-state">Loading accounts…</div>
-      </div>
-
-      <div class="section-title">Add Transaction</div>
-      <form id="txn-form" class="txn-form">
-        <input type="hidden" id="txn-id" value="">
-        <div class="txn-form-grid">
-          <div class="field">
-            <label>Type</label>
-            <div class="type-toggle">
-              <button type="button" class="type-btn active" data-type="expense" id="type-expense-btn">Expense</button>
-              <button type="button" class="type-btn" data-type="income" id="type-income-btn">Income</button>
+      <div id="page-transactions" class="page" style="display:none;">
+        <div class="section-title">Add Transaction</div>
+        <form id="txn-form" class="txn-form">
+          <input type="hidden" id="txn-id" value="">
+          <div class="txn-form-grid">
+            <div class="field">
+              <label>Type</label>
+              <div class="type-toggle">
+                <button type="button" class="type-btn active" data-type="expense" id="type-expense-btn">Expense</button>
+                <button type="button" class="type-btn" data-type="income" id="type-income-btn">Income</button>
+              </div>
+            </div>
+            <div class="field">
+              <label for="txn-category">Category</label>
+              <select id="txn-category" required></select>
+            </div>
+            <div class="field">
+              <label for="txn-account">Account</label>
+              <select id="txn-account" required></select>
+            </div>
+            <div class="field">
+              <label for="txn-amount">Amount (₹)</label>
+              <input type="number" id="txn-amount" min="0.01" step="0.01" required>
+            </div>
+            <div class="field">
+              <label for="txn-date">Date</label>
+              <input type="date" id="txn-date" required>
+            </div>
+            <div class="field">
+              <label for="txn-note">Note (optional)</label>
+              <input type="text" id="txn-note" placeholder="e.g. Zomato order">
             </div>
           </div>
-          <div class="field">
-            <label for="txn-category">Category</label>
-            <select id="txn-category" required></select>
+          <div class="txn-form-actions">
+            <button type="submit" class="btn-primary" id="txn-submit-btn" style="width:auto; padding:11px 28px;">Add Transaction</button>
+            <button type="button" class="btn-ghost" id="txn-cancel-edit-btn" style="display:none;">Cancel Edit</button>
           </div>
-          <div class="field">
-            <label for="txn-account">Account</label>
-            <select id="txn-account" required></select>
-          </div>
-          <div class="field">
-            <label for="txn-amount">Amount (₹)</label>
-            <input type="number" id="txn-amount" min="0.01" step="0.01" required>
-          </div>
-          <div class="field">
-            <label for="txn-date">Date</label>
-            <input type="date" id="txn-date" required>
-          </div>
-          <div class="field">
-            <label for="txn-note">Note (optional)</label>
-            <input type="text" id="txn-note" placeholder="e.g. Zomato order">
-          </div>
-        </div>
-        <div class="txn-form-actions">
-          <button type="submit" class="btn-primary" id="txn-submit-btn" style="width:auto; padding:11px 28px;">Add Transaction</button>
-          <button type="button" class="btn-ghost" id="txn-cancel-edit-btn" style="display:none;">Cancel Edit</button>
-        </div>
-        <div class="login-error" id="txn-error"></div>
-      </form>
+          <div class="login-error" id="txn-error"></div>
+        </form>
 
-      <div class="section-title">Recent Transactions</div>
-      <div id="txn-list">
-        <div class="loading-state">Loading transactions…</div>
+        <div class="section-title">Recent Transactions</div>
+        <div id="txn-list">
+          <div class="loading-state">Loading transactions…</div>
+        </div>
       </div>
     </div>
   </div>
@@ -623,6 +629,17 @@
     document.getElementById('net-worth-value').textContent = fmtINR(netWorth);
     document.getElementById('included-count-value').textContent = accounts.length;
   }
+
+  // ---------- PAGE NAVIGATION ----------
+  document.querySelectorAll('.nav-item[data-page]').forEach(item => {
+    item.addEventListener('click', () => {
+      const page = item.dataset.page;
+      document.querySelectorAll('.nav-item[data-page]').forEach(n => n.classList.remove('active'));
+      item.classList.add('active');
+      document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+      document.getElementById('page-' + page).style.display = 'block';
+    });
+  });
 
   // ---------- TRANSACTIONS ----------
 
