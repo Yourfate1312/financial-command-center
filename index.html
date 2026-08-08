@@ -455,9 +455,9 @@
       <div class="nav-item" data-page="loans">Debtors &amp; Creditors</div>
       <div class="nav-item" data-page="gambling">Gambling</div>
       <div class="nav-item" data-page="trading">Trading</div>
-      <div class="nav-item">Credit Cards <span class="tag">soon</span></div>
-      <div class="nav-item">Investments <span class="tag">soon</span></div>
-      <div class="nav-item">Rewards <span class="tag">soon</span></div>
+      <div class="nav-item" data-page="creditcards">Credit Cards</div>
+      <div class="nav-item" data-page="investments">Investments</div>
+      <div class="nav-item" data-page="rewards">Rewards</div>
       <div class="nav-item">Analytics <span class="tag">soon</span></div>
     </div>
 
@@ -467,7 +467,7 @@
           <div class="summary-cell">
             <div class="label">Net Worth</div>
             <div class="value amber" id="dash-net-worth">—</div>
-            <div class="sub">Banks + Cash + Debtors − Creditors</div>
+            <div class="sub">Banks + Cash + Debtors − Creditors + Investments</div>
           </div>
           <div class="summary-cell">
             <div class="label">This Month Income</div>
@@ -768,6 +768,139 @@
         <div class="section-title">Trade History</div>
         <div id="trade-list"><div class="loading-state">Loading trades…</div></div>
       </div>
+
+      <div id="page-creditcards" class="page" style="display:none;">
+        <div class="section-title">Credit Cards</div>
+        <div id="cc-list"><div class="loading-state">Loading…</div></div>
+        <div class="section-title">Update Card Details</div>
+        <form id="cc-form" class="txn-form">
+          <div class="txn-form-grid">
+            <div class="field">
+              <label for="cc-select">Card</label>
+              <select id="cc-select"></select>
+            </div>
+            <div class="field">
+              <label for="cc-balance">Current Balance Owed (₹)</label>
+              <input type="number" id="cc-balance" step="0.01" required>
+            </div>
+            <div class="field">
+              <label for="cc-limit">Credit Limit (₹)</label>
+              <input type="number" id="cc-limit" step="0.01">
+            </div>
+            <div class="field">
+              <label for="cc-statement">Statement Date</label>
+              <input type="date" id="cc-statement">
+            </div>
+            <div class="field">
+              <label for="cc-due">Due Date</label>
+              <input type="date" id="cc-due">
+            </div>
+          </div>
+          <button type="submit" class="btn-primary" style="width:auto; padding:11px 28px;">Update Card</button>
+          <div class="login-error" id="cc-error"></div>
+        </form>
+      </div>
+
+      <div id="page-investments" class="page" style="display:none;">
+        <div class="summary-row">
+          <div class="summary-cell">
+            <div class="label">Held at Cost</div>
+            <div class="value amber" id="inv-held-total">—</div>
+            <div class="sub">Counted in Net Worth</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Realized Gains/Losses</div>
+            <div class="value" id="inv-realized-total">—</div>
+            <div class="sub">From sold investments</div>
+          </div>
+        </div>
+
+        <div class="section-title">Add Investment</div>
+        <form id="inv-form" class="txn-form">
+          <input type="hidden" id="inv-id" value="">
+          <div class="txn-form-grid">
+            <div class="field">
+              <label for="inv-name">Name</label>
+              <input type="text" id="inv-name" placeholder="e.g. Titan shares, Gold ETF" required>
+            </div>
+            <div class="field">
+              <label for="inv-category">Category</label>
+              <select id="inv-category">
+                <option>Stocks</option>
+                <option>Mutual Funds</option>
+                <option>Gold</option>
+                <option>Real Estate</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="inv-cost">Cost Price (₹)</label>
+              <input type="number" id="inv-cost" min="0.01" step="0.01" required>
+            </div>
+            <div class="field">
+              <label for="inv-date">Purchase Date</label>
+              <input type="date" id="inv-date" required>
+            </div>
+            <div class="field">
+              <label for="inv-notes">Notes (optional)</label>
+              <input type="text" id="inv-notes">
+            </div>
+          </div>
+          <div class="txn-form-actions">
+            <button type="submit" class="btn-primary" id="inv-submit-btn" style="width:auto; padding:11px 28px;">Add Investment</button>
+            <button type="button" class="btn-ghost" id="inv-cancel-edit-btn" style="display:none;">Cancel Edit</button>
+          </div>
+          <div class="login-error" id="inv-error"></div>
+        </form>
+
+        <div class="section-title">Held (Counted in Net Worth)</div>
+        <div id="inv-held-list"><div class="loading-state">Loading…</div></div>
+
+        <div class="section-title">Sold (Realized Gains/Losses)</div>
+        <div id="inv-sold-list"></div>
+      </div>
+
+      <div id="page-rewards" class="page" style="display:none;">
+        <div class="section-title">Add Reward / Perk</div>
+        <form id="reward-form" class="txn-form">
+          <input type="hidden" id="reward-id" value="">
+          <div class="txn-form-grid">
+            <div class="field">
+              <label for="reward-brand">Brand / Program</label>
+              <input type="text" id="reward-brand" placeholder="e.g. Titan Shareholder, IndiGo BluChip" required>
+            </div>
+            <div class="field">
+              <label for="reward-type">Type</label>
+              <select id="reward-type">
+                <option value="shareholder">Shareholder Perk</option>
+                <option value="credit_card">Credit Card Points</option>
+                <option value="airline_hotel">Airline / Hotel Miles</option>
+                <option value="app">App Rewards</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="reward-balance">Balance / Points</label>
+              <input type="number" id="reward-balance" step="0.01" required>
+            </div>
+            <div class="field">
+              <label for="reward-expiry">Expiry Date (optional)</label>
+              <input type="date" id="reward-expiry">
+            </div>
+            <div class="field">
+              <label for="reward-notes">Notes (optional)</label>
+              <input type="text" id="reward-notes">
+            </div>
+          </div>
+          <div class="txn-form-actions">
+            <button type="submit" class="btn-primary" id="reward-submit-btn" style="width:auto; padding:11px 28px;">Add</button>
+            <button type="button" class="btn-ghost" id="reward-cancel-edit-btn" style="display:none;">Cancel Edit</button>
+          </div>
+          <div class="login-error" id="reward-error"></div>
+        </form>
+
+        <div class="section-title">Your Rewards</div>
+        <div id="reward-list"><div class="loading-state">Loading…</div></div>
+      </div>
     </div>
   </div>
 </div>
@@ -829,6 +962,9 @@
     await loadLoans();
     await loadBets();
     await loadTrades();
+    await loadCreditCards();
+    await loadInvestments();
+    await loadRewards();
     await loadDashboard();
   }
 
@@ -1313,6 +1449,290 @@
     await loadDashboard();
   };
 
+  // ---------- CREDIT CARDS ----------
+
+  const ccForm = document.getElementById('cc-form');
+  const ccError = document.getElementById('cc-error');
+  let ccAccountsCache = [];
+
+  async function loadCreditCards() {
+    const { data: cards, error } = await sb.from('accounts').select('*').eq('type', 'credit_card');
+    const listEl = document.getElementById('cc-list');
+    const selectEl = document.getElementById('cc-select');
+
+    if (error) { listEl.innerHTML = `<div class="empty-state">Error: ${error.message}</div>`; return; }
+
+    ccAccountsCache = cards || [];
+
+    if (!cards || cards.length === 0) {
+      listEl.innerHTML = `<div class="empty-state">No credit cards yet. Add one from the Accounts page.</div>`;
+      selectEl.innerHTML = '';
+      return;
+    }
+
+    selectEl.innerHTML = cards.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    fillCcForm(cards[0]);
+
+    listEl.innerHTML = cards.map(c => `
+      <div class="account-card">
+        <div class="type-badge">credit card</div>
+        <div class="name">${c.name}</div>
+        <div class="balance owed">−${fmtINR(c.balance)}</div>
+        <div class="meta">
+          <span>Limit: ${c.credit_limit ? fmtINR(c.credit_limit) : '—'}</span>
+          <span>Due: ${c.due_date || '—'}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function fillCcForm(c) {
+    document.getElementById('cc-balance').value = c.balance;
+    document.getElementById('cc-limit').value = c.credit_limit || '';
+    document.getElementById('cc-statement').value = c.statement_date || '';
+    document.getElementById('cc-due').value = c.due_date || '';
+  }
+
+  document.getElementById('cc-select').addEventListener('change', (e) => {
+    const c = ccAccountsCache.find(a => a.id === e.target.value);
+    if (c) fillCcForm(c);
+  });
+
+  ccForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    ccError.style.display = 'none';
+    const id = document.getElementById('cc-select').value;
+    const payload = {
+      balance: parseFloat(document.getElementById('cc-balance').value),
+      credit_limit: document.getElementById('cc-limit').value ? parseFloat(document.getElementById('cc-limit').value) : null,
+      statement_date: document.getElementById('cc-statement').value || null,
+      due_date: document.getElementById('cc-due').value || null
+    };
+    const { error } = await sb.from('accounts').update(payload).eq('id', id);
+    if (error) { ccError.textContent = error.message; ccError.style.display = 'block'; return; }
+    await loadCreditCards();
+    await loadAccounts();
+  });
+
+  // ---------- INVESTMENTS ----------
+
+  const invForm = document.getElementById('inv-form');
+  const invError = document.getElementById('inv-error');
+  const invSubmitBtn = document.getElementById('inv-submit-btn');
+  const invCancelEditBtn = document.getElementById('inv-cancel-edit-btn');
+  const invIdField = document.getElementById('inv-id');
+
+  document.getElementById('inv-date').valueAsDate = new Date();
+  invCancelEditBtn.addEventListener('click', () => resetInvForm());
+
+  function resetInvForm() {
+    invIdField.value = '';
+    invForm.reset();
+    document.getElementById('inv-date').valueAsDate = new Date();
+    invSubmitBtn.textContent = 'Add Investment';
+    invCancelEditBtn.style.display = 'none';
+    invError.style.display = 'none';
+  }
+
+  invForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    invError.style.display = 'none';
+    const { data: { user } } = await sb.auth.getUser();
+    const payload = {
+      user_id: user.id,
+      name: document.getElementById('inv-name').value,
+      category: document.getElementById('inv-category').value,
+      cost_price: parseFloat(document.getElementById('inv-cost').value),
+      purchase_date: document.getElementById('inv-date').value,
+      notes: document.getElementById('inv-notes').value || null
+    };
+    const editId = invIdField.value;
+    let error;
+    if (editId) {
+      ({ error } = await sb.from('investments').update(payload).eq('id', editId));
+    } else {
+      ({ error } = await sb.from('investments').insert(payload));
+    }
+    if (error) { invError.textContent = error.message; invError.style.display = 'block'; return; }
+    resetInvForm();
+    await loadInvestments();
+    await loadDashboard();
+  });
+
+  async function loadInvestments() {
+    const { data: invs, error } = await sb.from('investments').select('*').order('purchase_date', { ascending: false });
+    const heldEl = document.getElementById('inv-held-list');
+    const soldEl = document.getElementById('inv-sold-list');
+
+    if (error) { heldEl.innerHTML = `<div class="empty-state">Error: ${error.message}</div>`; return; }
+
+    const held = (invs || []).filter(i => !i.is_sold);
+    const sold = (invs || []).filter(i => i.is_sold);
+
+    const heldTotal = held.reduce((s, i) => s + Number(i.cost_price), 0);
+    const realizedTotal = sold.reduce((s, i) => s + (Number(i.sold_price) - Number(i.cost_price)), 0);
+    document.getElementById('inv-held-total').textContent = fmtINR(heldTotal);
+    const realizedEl = document.getElementById('inv-realized-total');
+    realizedEl.textContent = (realizedTotal >= 0 ? '+' : '') + fmtINR(realizedTotal);
+    realizedEl.style.color = realizedTotal >= 0 ? 'var(--green)' : 'var(--red)';
+
+    heldEl.innerHTML = held.length ? held.map(i => `
+      <div class="txn-row" style="grid-template-columns: 1fr 120px 120px auto;">
+        <div><span class="txn-cat">${i.name}</span><span class="txn-note">${i.category} · bought ${i.purchase_date}</span></div>
+        <div class="txn-account">${fmtINR(i.cost_price)}</div>
+        <div></div>
+        <div class="txn-row-actions">
+          <button type="button" onclick='editInv(${JSON.stringify(i)})'>Edit</button>
+          <button type="button" onclick="sellInv('${i.id}')">Mark Sold</button>
+          <button type="button" class="delete" onclick="deleteInv('${i.id}')">Delete</button>
+        </div>
+      </div>
+    `).join('') : `<div class="empty-state">No investments held.</div>`;
+
+    soldEl.innerHTML = sold.length ? sold.map(i => {
+      const gain = Number(i.sold_price) - Number(i.cost_price);
+      return `
+      <div class="txn-row" style="grid-template-columns: 1fr 120px 120px auto;">
+        <div><span class="txn-cat">${i.name}</span><span class="txn-note">bought ${fmtINR(i.cost_price)} → sold ${fmtINR(i.sold_price)} on ${i.sold_date}</span></div>
+        <div class="txn-amount ${gain >= 0 ? 'income' : 'expense'}">${gain >= 0 ? '+' : ''}${fmtINR(gain)}</div>
+        <div></div>
+        <div class="txn-row-actions">
+          <button type="button" class="delete" onclick="deleteInv('${i.id}')">Delete</button>
+        </div>
+      </div>
+    `; }).join('') : `<div class="empty-state">Nothing sold yet.</div>`;
+  }
+
+  window.editInv = function (i) {
+    invIdField.value = i.id;
+    document.getElementById('inv-name').value = i.name;
+    document.getElementById('inv-category').value = i.category;
+    document.getElementById('inv-cost').value = i.cost_price;
+    document.getElementById('inv-date').value = i.purchase_date;
+    document.getElementById('inv-notes').value = i.notes || '';
+    invSubmitBtn.textContent = 'Save Changes';
+    invCancelEditBtn.style.display = 'inline-block';
+    window.scrollTo({ top: invForm.offsetTop - 80, behavior: 'smooth' });
+  };
+
+  window.sellInv = async function (id) {
+    const soldPrice = prompt('Sold price (₹)?');
+    if (soldPrice === null || soldPrice === '') return;
+    const soldDate = prompt('Sold date (YYYY-MM-DD)?', new Date().toISOString().slice(0, 10));
+    if (soldDate === null) return;
+    const { error } = await sb.from('investments').update({
+      is_sold: true, sold_price: parseFloat(soldPrice), sold_date: soldDate
+    }).eq('id', id);
+    if (error) { alert('Error: ' + error.message); return; }
+    alert('Marked sold. Remember to log the gain as a "Windfall Gains" income (or the loss as "Windfall Loss" expense) in Transactions to reflect it in your accounts.');
+    await loadInvestments();
+    await loadDashboard();
+  };
+
+  window.deleteInv = async function (id) {
+    if (!confirm('Delete this investment record permanently?')) return;
+    const { error } = await sb.from('investments').delete().eq('id', id);
+    if (error) { alert('Error: ' + error.message); return; }
+    await loadInvestments();
+    await loadDashboard();
+  };
+
+  // ---------- REWARDS ----------
+
+  const rewardForm = document.getElementById('reward-form');
+  const rewardError = document.getElementById('reward-error');
+  const rewardSubmitBtn = document.getElementById('reward-submit-btn');
+  const rewardCancelEditBtn = document.getElementById('reward-cancel-edit-btn');
+  const rewardIdField = document.getElementById('reward-id');
+
+  rewardCancelEditBtn.addEventListener('click', () => resetRewardForm());
+
+  function resetRewardForm() {
+    rewardIdField.value = '';
+    rewardForm.reset();
+    rewardSubmitBtn.textContent = 'Add';
+    rewardCancelEditBtn.style.display = 'none';
+    rewardError.style.display = 'none';
+  }
+
+  rewardForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    rewardError.style.display = 'none';
+    const { data: { user } } = await sb.auth.getUser();
+    const payload = {
+      user_id: user.id,
+      brand: document.getElementById('reward-brand').value,
+      type: document.getElementById('reward-type').value,
+      balance: parseFloat(document.getElementById('reward-balance').value),
+      expiry_date: document.getElementById('reward-expiry').value || null,
+      notes: document.getElementById('reward-notes').value || null
+    };
+    const editId = rewardIdField.value;
+    let error;
+    if (editId) {
+      ({ error } = await sb.from('rewards').update(payload).eq('id', editId));
+    } else {
+      ({ error } = await sb.from('rewards').insert(payload));
+    }
+    if (error) { rewardError.textContent = error.message; rewardError.style.display = 'block'; return; }
+    resetRewardForm();
+    await loadRewards();
+  });
+
+  async function loadRewards() {
+    const { data: rewards, error } = await sb.from('rewards').select('*').order('expiry_date', { ascending: true, nullsFirst: false });
+    const listEl = document.getElementById('reward-list');
+    if (error) { listEl.innerHTML = `<div class="empty-state">Error: ${error.message}</div>`; return; }
+
+    if (!rewards || rewards.length === 0) {
+      listEl.innerHTML = `<div class="empty-state">No rewards tracked yet.</div>`;
+      return;
+    }
+
+    const now = new Date();
+    listEl.innerHTML = rewards.map(r => {
+      let expiryTag = '';
+      if (r.expiry_date) {
+        const days = Math.ceil((new Date(r.expiry_date) - now) / 86400000);
+        if (days < 0) expiryTag = '<span style="color:var(--red)">expired</span>';
+        else if (days <= 30) expiryTag = `<span style="color:var(--amber)">expires in ${days}d</span>`;
+        else expiryTag = `expires ${r.expiry_date}`;
+      } else {
+        expiryTag = 'no expiry';
+      }
+      return `
+        <div class="txn-row" style="grid-template-columns: 1fr 130px 120px auto;">
+          <div><span class="txn-cat">${r.brand}</span><span class="txn-note">${r.type.replace('_', ' ')}${r.notes ? ' · ' + r.notes : ''}</span></div>
+          <div class="txn-account">${r.balance}</div>
+          <div class="txn-account">${expiryTag}</div>
+          <div class="txn-row-actions">
+            <button type="button" onclick='editReward(${JSON.stringify(r)})'>Edit</button>
+            <button type="button" class="delete" onclick="deleteReward('${r.id}')">Delete</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  window.editReward = function (r) {
+    rewardIdField.value = r.id;
+    document.getElementById('reward-brand').value = r.brand;
+    document.getElementById('reward-type').value = r.type;
+    document.getElementById('reward-balance').value = r.balance;
+    document.getElementById('reward-expiry').value = r.expiry_date || '';
+    document.getElementById('reward-notes').value = r.notes || '';
+    rewardSubmitBtn.textContent = 'Save Changes';
+    rewardCancelEditBtn.style.display = 'inline-block';
+    window.scrollTo({ top: rewardForm.offsetTop - 80, behavior: 'smooth' });
+  };
+
+  window.deleteReward = async function (id) {
+    if (!confirm('Delete this reward record permanently?')) return;
+    const { error } = await sb.from('rewards').delete().eq('id', id);
+    if (error) { alert('Error: ' + error.message); return; }
+    await loadRewards();
+  };
+
   // ---------- DASHBOARD ----------
 
   async function loadDashboard() {
@@ -1323,10 +1743,12 @@
     // Net worth (reuse same logic as accounts)
     const { data: accounts } = await sb.from('accounts').select('*').eq('include_in_net_worth', true);
     const { data: loans } = await sb.from('loans').select('type, balance').eq('is_closed', false);
+    const { data: heldInvs } = await sb.from('investments').select('cost_price').eq('is_sold', false);
     const accountsTotal = (accounts || []).reduce((s, a) => s + Number(a.balance), 0);
     const debtorsTotal = (loans || []).filter(l => l.type === 'debtor').reduce((s, l) => s + Number(l.balance), 0);
     const creditorsTotal = (loans || []).filter(l => l.type === 'creditor').reduce((s, l) => s + Number(l.balance), 0);
-    const netWorth = accountsTotal + debtorsTotal - creditorsTotal;
+    const investmentsTotal = (heldInvs || []).reduce((s, i) => s + Number(i.cost_price), 0);
+    const netWorth = accountsTotal + debtorsTotal - creditorsTotal + investmentsTotal;
 
     document.getElementById('dash-net-worth').textContent = fmtINR(netWorth);
     document.getElementById('dash-debtors').textContent = fmtINR(debtorsTotal);
