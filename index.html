@@ -449,7 +449,8 @@
   <div class="layout">
     <div class="sidebar">
       <div class="sidebar-label">Modules</div>
-      <div class="nav-item active" data-page="accounts">Accounts</div>
+      <div class="nav-item active" data-page="dashboard">Dashboard</div>
+      <div class="nav-item" data-page="accounts">Accounts</div>
       <div class="nav-item" data-page="transactions">Transactions</div>
       <div class="nav-item" data-page="loans">Debtors &amp; Creditors</div>
       <div class="nav-item" data-page="gambling">Gambling</div>
@@ -461,7 +462,52 @@
     </div>
 
     <div class="main">
-      <div id="page-accounts" class="page">
+      <div id="page-dashboard" class="page">
+        <div class="summary-row">
+          <div class="summary-cell">
+            <div class="label">Net Worth</div>
+            <div class="value amber" id="dash-net-worth">—</div>
+            <div class="sub">Banks + Cash + Debtors − Creditors</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">This Month Income</div>
+            <div class="value" id="dash-income" style="color: var(--green);">—</div>
+            <div class="sub" id="dash-income-sub">—</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">This Month Expenses</div>
+            <div class="value" id="dash-expense" style="color: var(--red);">—</div>
+            <div class="sub" id="dash-expense-sub">—</div>
+          </div>
+        </div>
+
+        <div class="section-title">Top Expense Categories (This Month)</div>
+        <div id="dash-top-categories"><div class="loading-state">Loading…</div></div>
+
+        <div class="section-title">Quick Pulse</div>
+        <div class="account-grid">
+          <div class="account-card">
+            <div class="type-badge">gambling</div>
+            <div class="name">Betting P/L (All-time)</div>
+            <div class="balance" id="dash-gambling-pl">—</div>
+          </div>
+          <div class="account-card">
+            <div class="type-badge">debtors</div>
+            <div class="name">Owed To You</div>
+            <div class="balance" id="dash-debtors" style="color: var(--green);">—</div>
+          </div>
+          <div class="account-card">
+            <div class="type-badge">creditors</div>
+            <div class="name">You Owe</div>
+            <div class="balance" id="dash-creditors" style="color: var(--red);">—</div>
+          </div>
+        </div>
+
+        <div class="section-title">Recent Activity</div>
+        <div id="dash-recent"><div class="loading-state">Loading…</div></div>
+      </div>
+
+      <div id="page-accounts" class="page" style="display:none;">
         <div class="summary-row" id="summary-row">
           <div class="summary-cell">
             <div class="label">Net Worth</div>
@@ -714,6 +760,7 @@
     await loadTransactions();
     await loadLoans();
     await loadBets();
+    await loadDashboard();
   }
 
   async function loadAccounts() {
@@ -1065,6 +1112,91 @@
     if (error) { alert('Error: ' + error.message); return; }
     await loadBets();
   };
+
+  // ---------- DASHBOARD ----------
+
+  async function loadDashboard() {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+
+    // Net worth (reuse same logic as accounts)
+    const { data: accounts } = await sb.from('accounts').select('*').eq('include_in_net_worth', true);
+    const { data: loans } = await sb.from('loans').select('type, balance').eq('is_closed', false);
+    const accountsTotal = (accounts || []).reduce((s, a) => s + Number(a.balance), 0);
+    const debtorsTotal = (loans || []).filter(l => l.type === 'debtor').reduce((s, l) => s + Number(l.balance), 0);
+    const creditorsTotal = (loans || []).filter(l => l.type === 'creditor').reduce((s, l) => s + Number(l.balance), 0);
+    const netWorth = accountsTotal + debtorsTotal - creditorsTotal;
+
+    document.getElementById('dash-net-worth').textContent = fmtINR(netWorth);
+    document.getElementById('dash-debtors').textContent = fmtINR(debtorsTotal);
+    document.getElementById('dash-creditors').textContent = fmtINR(creditorsTotal);
+
+    // This month's transactions
+    const { data: monthTxns } = await sb
+      .from('transactions')
+      .select('*')
+      .gte('txn_date', monthStart)
+      .lte('txn_date', monthEnd);
+
+    const income = (monthTxns || []).filter(t => t.type === 'income');
+    const expenses = (monthTxns || []).filter(t => t.type === 'expense');
+    const incomeTotal = income.reduce((s, t) => s + Number(t.amount), 0);
+    const expenseTotal = expenses.reduce((s, t) => s + Number(t.amount), 0);
+
+    document.getElementById('dash-income').textContent = fmtINR(incomeTotal);
+    document.getElementById('dash-income-sub').textContent = `${income.length} entries`;
+    document.getElementById('dash-expense').textContent = fmtINR(expenseTotal);
+    document.getElementById('dash-expense-sub').textContent = `${expenses.length} entries`;
+
+    // Top expense categories this month
+    const catTotals = {};
+    expenses.forEach(t => { catTotals[t.category] = (catTotals[t.category] || 0) + Number(t.amount); });
+    const topCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]).slice(0, 6);
+    const catEl = document.getElementById('dash-top-categories');
+    catEl.innerHTML = topCats.length
+      ? topCats.map(([cat, amt]) => `
+          <div class="txn-row" style="grid-template-columns: 1fr auto;">
+            <div class="txn-cat">${cat}</div>
+            <div class="txn-amount expense">${fmtINR(amt)}</div>
+          </div>
+        `).join('')
+      : `<div class="empty-state">No expenses logged this month yet.</div>`;
+
+    // Gambling pulse (all-time)
+    const { data: bets } = await sb.from('bets').select('*');
+    const settledBets = (bets || []).filter(b => b.outcome !== 'pending');
+    const betStaked = settledBets.reduce((s, b) => s + Number(b.stake), 0);
+    const betReturned = settledBets.reduce((s, b) => s + betPayout(b), 0);
+    const betPL = betReturned - betStaked;
+    const glEl = document.getElementById('dash-gambling-pl');
+    glEl.textContent = (betPL >= 0 ? '+' : '') + fmtINR(betPL);
+    glEl.style.color = betPL >= 0 ? 'var(--green)' : 'var(--red)';
+
+    // Recent activity: last 8 transactions across the board
+    const { data: recentTxns } = await sb
+      .from('transactions')
+      .select('*, accounts(name)')
+      .order('txn_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(8);
+
+    const recentEl = document.getElementById('dash-recent');
+    recentEl.innerHTML = (recentTxns && recentTxns.length)
+      ? recentTxns.map(t => `
+          <div class="txn-row">
+            <div class="txn-date">${t.txn_date}</div>
+            <div>
+              <span class="txn-cat">${t.category}</span>
+              ${t.note ? `<span class="txn-note">${t.note}</span>` : ''}
+            </div>
+            <div class="txn-account">${t.accounts?.name || '—'}</div>
+            <div class="txn-amount ${t.type}">${t.type === 'income' ? '+' : '−'}${fmtINR(t.amount)}</div>
+            <div></div>
+          </div>
+        `).join('')
+      : `<div class="empty-state">No transactions yet.</div>`;
+  }
 
   // ---------- PAGE NAVIGATION ----------
   document.querySelectorAll('.nav-item[data-page]').forEach(item => {
