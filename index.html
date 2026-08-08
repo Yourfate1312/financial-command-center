@@ -452,9 +452,9 @@
       <div class="nav-item active" data-page="accounts">Accounts</div>
       <div class="nav-item" data-page="transactions">Transactions</div>
       <div class="nav-item" data-page="loans">Debtors &amp; Creditors</div>
+      <div class="nav-item" data-page="gambling">Gambling</div>
       <div class="nav-item">Trading <span class="tag">soon</span></div>
       <div class="nav-item">Credit Cards <span class="tag">soon</span></div>
-      <div class="nav-item">Gambling <span class="tag">soon</span></div>
       <div class="nav-item">Investments <span class="tag">soon</span></div>
       <div class="nav-item">Rewards <span class="tag">soon</span></div>
       <div class="nav-item">Analytics <span class="tag">soon</span></div>
@@ -578,6 +578,82 @@
         <div class="section-title">Creditors (You Owe)</div>
         <div id="creditors-list"><div class="loading-state">Loading…</div></div>
       </div>
+
+      <div id="page-gambling" class="page" style="display:none;">
+        <div class="summary-row">
+          <div class="summary-cell">
+            <div class="label">Net P/L</div>
+            <div class="value" id="bet-net-pl">—</div>
+            <div class="sub">All-time</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Win Rate</div>
+            <div class="value" id="bet-win-rate">—</div>
+            <div class="sub" id="bet-win-count">—</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Total Staked</div>
+            <div class="value" id="bet-total-staked">—</div>
+            <div class="sub">Returned: <span id="bet-total-returned">—</span></div>
+          </div>
+        </div>
+
+        <div class="section-title">By Sport</div>
+        <div id="bet-by-sport" class="account-grid"></div>
+
+        <div class="section-title">Log a Bet</div>
+        <form id="bet-form" class="txn-form">
+          <input type="hidden" id="bet-id" value="">
+          <div class="txn-form-grid">
+            <div class="field">
+              <label for="bet-sport">Sport</label>
+              <select id="bet-sport">
+                <option>Cricket</option>
+                <option>Football</option>
+                <option>Tennis</option>
+                <option>Snooker (Bets)</option>
+                <option>F1</option>
+                <option>NBA</option>
+                <option>MLB</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="bet-match">Match / Event</label>
+              <input type="text" id="bet-match" placeholder="e.g. multi, IND vs ENG">
+            </div>
+            <div class="field">
+              <label for="bet-stake">Stake (₹)</label>
+              <input type="number" id="bet-stake" min="0.01" step="0.01" required>
+            </div>
+            <div class="field">
+              <label for="bet-odds">Odds</label>
+              <input type="number" id="bet-odds" min="1" step="0.01" required>
+            </div>
+            <div class="field">
+              <label for="bet-date">Date</label>
+              <input type="date" id="bet-date" required>
+            </div>
+            <div class="field">
+              <label for="bet-outcome">Outcome</label>
+              <select id="bet-outcome">
+                <option value="pending">Pending</option>
+                <option value="win">Win</option>
+                <option value="loss">Loss</option>
+                <option value="push">Push</option>
+              </select>
+            </div>
+          </div>
+          <div class="txn-form-actions">
+            <button type="submit" class="btn-primary" id="bet-submit-btn" style="width:auto; padding:11px 28px;">Add Bet</button>
+            <button type="button" class="btn-ghost" id="bet-cancel-edit-btn" style="display:none;">Cancel Edit</button>
+          </div>
+          <div class="login-error" id="bet-error"></div>
+        </form>
+
+        <div class="section-title">Bet History</div>
+        <div id="bet-list"><div class="loading-state">Loading bets…</div></div>
+      </div>
     </div>
   </div>
 </div>
@@ -637,6 +713,7 @@
     await loadAllAccountsForDropdown();
     await loadTransactions();
     await loadLoans();
+    await loadBets();
   }
 
   async function loadAccounts() {
@@ -827,6 +904,166 @@
     if (error) { alert('Error: ' + error.message); return; }
     await loadLoans();
     await loadAccounts();
+  };
+
+  // ---------- GAMBLING / BETS ----------
+
+  const betForm = document.getElementById('bet-form');
+  const betError = document.getElementById('bet-error');
+  const betSubmitBtn = document.getElementById('bet-submit-btn');
+  const betCancelEditBtn = document.getElementById('bet-cancel-edit-btn');
+  const betIdField = document.getElementById('bet-id');
+
+  document.getElementById('bet-date').valueAsDate = new Date();
+
+  betCancelEditBtn.addEventListener('click', () => resetBetForm());
+
+  function resetBetForm() {
+    betIdField.value = '';
+    betForm.reset();
+    document.getElementById('bet-date').valueAsDate = new Date();
+    betSubmitBtn.textContent = 'Add Bet';
+    betCancelEditBtn.style.display = 'none';
+    betError.style.display = 'none';
+  }
+
+  betForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    betError.style.display = 'none';
+
+    const { data: { user } } = await sb.auth.getUser();
+    const payload = {
+      user_id: user.id,
+      bet_date: document.getElementById('bet-date').value,
+      sport: document.getElementById('bet-sport').value,
+      match: document.getElementById('bet-match').value || null,
+      stake: parseFloat(document.getElementById('bet-stake').value),
+      odds: parseFloat(document.getElementById('bet-odds').value),
+      outcome: document.getElementById('bet-outcome').value
+    };
+
+    const editId = betIdField.value;
+    let error;
+    if (editId) {
+      ({ error } = await sb.from('bets').update(payload).eq('id', editId));
+    } else {
+      ({ error } = await sb.from('bets').insert(payload));
+    }
+
+    if (error) {
+      betError.textContent = error.message;
+      betError.style.display = 'block';
+      return;
+    }
+
+    resetBetForm();
+    await loadBets();
+  });
+
+  function betPayout(b) {
+    if (b.outcome === 'win') return b.stake * b.odds;
+    if (b.outcome === 'push') return b.stake;
+    return 0; // loss or pending
+  }
+
+  async function loadBets() {
+    const listEl = document.getElementById('bet-list');
+    const { data: bets, error } = await sb
+      .from('bets')
+      .select('*')
+      .order('bet_date', { ascending: false });
+
+    if (error) {
+      listEl.innerHTML = `<div class="empty-state">Error loading bets: ${error.message}</div>`;
+      return;
+    }
+
+    if (!bets || bets.length === 0) {
+      listEl.innerHTML = `<div class="empty-state">No bets logged yet.</div>`;
+      document.getElementById('bet-net-pl').textContent = fmtINR(0);
+      document.getElementById('bet-win-rate').textContent = '—';
+      document.getElementById('bet-win-count').textContent = '—';
+      document.getElementById('bet-total-staked').textContent = fmtINR(0);
+      document.getElementById('bet-total-returned').textContent = fmtINR(0);
+      document.getElementById('bet-by-sport').innerHTML = '';
+      return;
+    }
+
+    // Overall stats (settled bets only for win rate; staked/returned across all non-pending)
+    const settled = bets.filter(b => b.outcome !== 'pending');
+    const staked = settled.reduce((s, b) => s + Number(b.stake), 0);
+    const returned = settled.reduce((s, b) => s + betPayout(b), 0);
+    const netPL = returned - staked;
+    const wins = settled.filter(b => b.outcome === 'win').length;
+    const winRate = settled.length ? (wins / settled.length * 100).toFixed(1) : '0.0';
+
+    const netPLEl = document.getElementById('bet-net-pl');
+    netPLEl.textContent = (netPL >= 0 ? '+' : '') + fmtINR(netPL);
+    netPLEl.className = 'value ' + (netPL >= 0 ? 'amber' : '');
+    netPLEl.style.color = netPL >= 0 ? '' : 'var(--red)';
+
+    document.getElementById('bet-win-rate').textContent = winRate + '%';
+    document.getElementById('bet-win-count').textContent = `${wins}/${settled.length} settled bets`;
+    document.getElementById('bet-total-staked').textContent = fmtINR(staked);
+    document.getElementById('bet-total-returned').textContent = fmtINR(returned);
+
+    // By sport breakdown
+    const bySport = {};
+    settled.forEach(b => {
+      if (!bySport[b.sport]) bySport[b.sport] = { staked: 0, returned: 0, count: 0 };
+      bySport[b.sport].staked += Number(b.stake);
+      bySport[b.sport].returned += betPayout(b);
+      bySport[b.sport].count += 1;
+    });
+    const sportEl = document.getElementById('bet-by-sport');
+    sportEl.innerHTML = Object.entries(bySport).map(([sport, v]) => {
+      const pl = v.returned - v.staked;
+      return `
+        <div class="account-card">
+          <div class="type-badge">${v.count} bet${v.count !== 1 ? 's' : ''}</div>
+          <div class="name">${sport}</div>
+          <div class="balance" style="color: ${pl >= 0 ? 'var(--green)' : 'var(--red)'}">${pl >= 0 ? '+' : ''}${fmtINR(pl)}</div>
+        </div>
+      `;
+    }).join('');
+
+    // History list
+    const outcomeColor = { win: 'income', loss: 'expense', push: '', pending: '' };
+    listEl.innerHTML = bets.map(b => `
+      <div class="txn-row" style="grid-template-columns: 90px 1fr 90px 90px auto;">
+        <div class="txn-date">${b.bet_date}</div>
+        <div>
+          <span class="txn-cat">${b.sport}</span>
+          ${b.match ? `<span class="txn-note">${b.match}</span>` : ''}
+        </div>
+        <div class="txn-account">stake ${fmtINR(b.stake)} @ ${b.odds}</div>
+        <div class="txn-amount ${outcomeColor[b.outcome]}" style="text-transform:uppercase; font-size:11px;">${b.outcome}</div>
+        <div class="txn-row-actions">
+          <button type="button" onclick='editBet(${JSON.stringify(b)})'>Edit</button>
+          <button type="button" class="delete" onclick="deleteBet('${b.id}')">Delete</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  window.editBet = function (b) {
+    betIdField.value = b.id;
+    document.getElementById('bet-sport').value = b.sport;
+    document.getElementById('bet-match').value = b.match || '';
+    document.getElementById('bet-stake').value = b.stake;
+    document.getElementById('bet-odds').value = b.odds;
+    document.getElementById('bet-date').value = b.bet_date;
+    document.getElementById('bet-outcome').value = b.outcome;
+    betSubmitBtn.textContent = 'Save Changes';
+    betCancelEditBtn.style.display = 'inline-block';
+    window.scrollTo({ top: betForm.offsetTop - 80, behavior: 'smooth' });
+  };
+
+  window.deleteBet = async function (id) {
+    if (!confirm('Delete this bet permanently?')) return;
+    const { error } = await sb.from('bets').delete().eq('id', id);
+    if (error) { alert('Error: ' + error.message); return; }
+    await loadBets();
   };
 
   // ---------- PAGE NAVIGATION ----------
