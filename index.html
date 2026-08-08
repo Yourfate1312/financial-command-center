@@ -451,6 +451,8 @@
       <div class="sidebar-label">Modules</div>
       <div class="nav-item active" data-page="accounts">Accounts</div>
       <div class="nav-item" data-page="transactions">Transactions</div>
+      <div class="nav-item" data-page="loans">Debtors &amp; Creditors</div>
+      <div class="nav-item" data-page="loans">Loans</div>
       <div class="nav-item">Trading <span class="tag">soon</span></div>
       <div class="nav-item">Credit Cards <span class="tag">soon</span></div>
       <div class="nav-item">Gambling <span class="tag">soon</span></div>
@@ -465,7 +467,7 @@
           <div class="summary-cell">
             <div class="label">Net Worth</div>
             <div class="value amber" id="net-worth-value">—</div>
-            <div class="sub">Banks + Cash</div>
+            <div class="sub">Banks + Cash + Debtors − Creditors</div>
           </div>
           <div class="summary-cell">
             <div class="label">Accounts</div>
@@ -525,6 +527,58 @@
           <div class="loading-state">Loading transactions…</div>
         </div>
       </div>
+
+      <div id="page-loans" class="page" style="display:none;">
+        <div class="summary-row">
+          <div class="summary-cell">
+            <div class="label">Owed To You (Debtors)</div>
+            <div class="value" id="debtors-total" style="color: var(--green);">—</div>
+            <div class="sub">Adds to net worth</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">You Owe (Creditors)</div>
+            <div class="value" id="creditors-total" style="color: var(--red);">—</div>
+            <div class="sub">Subtracts from net worth</div>
+          </div>
+        </div>
+
+        <div class="section-title">Add Debtor / Creditor</div>
+        <form id="loan-form" class="txn-form">
+          <input type="hidden" id="loan-id" value="">
+          <div class="txn-form-grid">
+            <div class="field">
+              <label>Type</label>
+              <div class="type-toggle">
+                <button type="button" class="type-btn active" data-loantype="debtor" id="type-debtor-btn">Debtor</button>
+                <button type="button" class="type-btn" data-loantype="creditor" id="type-creditor-btn">Creditor</button>
+              </div>
+            </div>
+            <div class="field">
+              <label for="loan-name">Name</label>
+              <input type="text" id="loan-name" placeholder="e.g. Rahul" required>
+            </div>
+            <div class="field">
+              <label for="loan-balance">Outstanding Balance (₹)</label>
+              <input type="number" id="loan-balance" min="0" step="0.01" required>
+            </div>
+            <div class="field">
+              <label for="loan-notes">Notes (optional)</label>
+              <input type="text" id="loan-notes" placeholder="e.g. lent for bike repair">
+            </div>
+          </div>
+          <div class="txn-form-actions">
+            <button type="submit" class="btn-primary" id="loan-submit-btn" style="width:auto; padding:11px 28px;">Add</button>
+            <button type="button" class="btn-ghost" id="loan-cancel-edit-btn" style="display:none;">Cancel Edit</button>
+          </div>
+          <div class="login-error" id="loan-error"></div>
+        </form>
+
+        <div class="section-title">Debtors (Owe You)</div>
+        <div id="debtors-list"><div class="loading-state">Loading…</div></div>
+
+        <div class="section-title">Creditors (You Owe)</div>
+        <div id="creditors-list"><div class="loading-state">Loading…</div></div>
+      </div>
     </div>
   </div>
 </div>
@@ -583,6 +637,7 @@
     await loadAccounts();
     await loadAllAccountsForDropdown();
     await loadTransactions();
+    await loadLoans();
   }
 
   async function loadAccounts() {
@@ -601,12 +656,12 @@
 
     if (!accounts || accounts.length === 0) {
       includedEl.innerHTML = `<div class="empty-state">No accounts yet.</div>`;
-      updateSummary([]);
+      await updateSummary([]);
       return;
     }
 
     includedEl.innerHTML = accounts.map(renderCard).join('');
-    updateSummary(accounts);
+    await updateSummary(accounts);
   }
 
   function renderCard(a) {
@@ -624,11 +679,158 @@
     `;
   }
 
-  function updateSummary(accounts) {
-    const netWorth = accounts.reduce((sum, a) => sum + Number(a.balance), 0);
+  async function updateSummary(accounts) {
+    const accountsTotal = accounts.reduce((sum, a) => sum + Number(a.balance), 0);
+
+    const { data: loans } = await sb.from('loans').select('type, balance').eq('is_closed', false);
+    const debtorsTotal = (loans || []).filter(l => l.type === 'debtor').reduce((s, l) => s + Number(l.balance), 0);
+    const creditorsTotal = (loans || []).filter(l => l.type === 'creditor').reduce((s, l) => s + Number(l.balance), 0);
+
+    const netWorth = accountsTotal + debtorsTotal - creditorsTotal;
+
     document.getElementById('net-worth-value').textContent = fmtINR(netWorth);
     document.getElementById('included-count-value').textContent = accounts.length;
   }
+
+  // ---------- DEBTORS & CREDITORS ----------
+
+  let currentLoanType = 'debtor';
+  const typeDebtorBtn = document.getElementById('type-debtor-btn');
+  const typeCreditorBtn = document.getElementById('type-creditor-btn');
+  const loanForm = document.getElementById('loan-form');
+  const loanError = document.getElementById('loan-error');
+  const loanSubmitBtn = document.getElementById('loan-submit-btn');
+  const loanCancelEditBtn = document.getElementById('loan-cancel-edit-btn');
+  const loanIdField = document.getElementById('loan-id');
+
+  function setLoanType(type) {
+    currentLoanType = type;
+    typeDebtorBtn.classList.toggle('active', type === 'debtor');
+    typeCreditorBtn.classList.toggle('active', type === 'creditor');
+  }
+  typeDebtorBtn.addEventListener('click', () => setLoanType('debtor'));
+  typeCreditorBtn.addEventListener('click', () => setLoanType('creditor'));
+
+  loanCancelEditBtn.addEventListener('click', () => resetLoanForm());
+
+  function resetLoanForm() {
+    loanIdField.value = '';
+    loanForm.reset();
+    setLoanType('debtor');
+    loanSubmitBtn.textContent = 'Add';
+    loanCancelEditBtn.style.display = 'none';
+    loanError.style.display = 'none';
+  }
+
+  loanForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    loanError.style.display = 'none';
+
+    const { data: { user } } = await sb.auth.getUser();
+    const payload = {
+      user_id: user.id,
+      type: currentLoanType,
+      counterparty: document.getElementById('loan-name').value,
+      balance: parseFloat(document.getElementById('loan-balance').value),
+      notes: document.getElementById('loan-notes').value || null
+    };
+
+    const editId = loanIdField.value;
+    let error;
+    if (editId) {
+      ({ error } = await sb.from('loans').update(payload).eq('id', editId));
+    } else {
+      ({ error } = await sb.from('loans').insert(payload));
+    }
+
+    if (error) {
+      loanError.textContent = error.message;
+      loanError.style.display = 'block';
+      return;
+    }
+
+    resetLoanForm();
+    await loadLoans();
+    await loadAccounts();
+  });
+
+  async function loadLoans() {
+    const { data: loans, error } = await sb
+      .from('loans')
+      .select('*')
+      .eq('is_closed', false)
+      .order('created_at', { ascending: false });
+
+    const debtorsEl = document.getElementById('debtors-list');
+    const creditorsEl = document.getElementById('creditors-list');
+
+    if (error) {
+      debtorsEl.innerHTML = `<div class="empty-state">Error: ${error.message}</div>`;
+      return;
+    }
+
+    const debtors = (loans || []).filter(l => l.type === 'debtor');
+    const creditors = (loans || []).filter(l => l.type === 'creditor');
+
+    debtorsEl.innerHTML = debtors.length
+      ? debtors.map(renderLoanRow).join('')
+      : `<div class="empty-state">No debtors yet.</div>`;
+
+    creditorsEl.innerHTML = creditors.length
+      ? creditors.map(renderLoanRow).join('')
+      : `<div class="empty-state">No creditors yet.</div>`;
+
+    const debtorsTotal = debtors.reduce((s, l) => s + Number(l.balance), 0);
+    const creditorsTotal = creditors.reduce((s, l) => s + Number(l.balance), 0);
+    document.getElementById('debtors-total').textContent = fmtINR(debtorsTotal);
+    document.getElementById('creditors-total').textContent = fmtINR(creditorsTotal);
+
+    return { debtorsTotal, creditorsTotal };
+  }
+
+  function renderLoanRow(l) {
+    return `
+      <div class="txn-row" style="grid-template-columns: 1fr 140px auto;">
+        <div>
+          <span class="txn-cat">${l.counterparty}</span>
+          ${l.notes ? `<span class="txn-note">${l.notes}</span>` : ''}
+        </div>
+        <div class="txn-amount ${l.type === 'debtor' ? 'income' : 'expense'}">${fmtINR(l.balance)}</div>
+        <div class="txn-row-actions">
+          <button type="button" onclick="editLoan('${l.id}','${l.type}','${l.counterparty.replace(/'/g, "\\'")}',${l.balance},${l.notes ? `'${l.notes.replace(/'/g, "\\'")}'` : 'null'})">Edit</button>
+          <button type="button" onclick="settleLoan('${l.id}')">Settle</button>
+          <button type="button" class="delete" onclick="deleteLoan('${l.id}')">Delete</button>
+        </div>
+      </div>
+    `;
+  }
+
+  window.editLoan = function (id, type, name, balance, notes) {
+    setLoanType(type);
+    loanIdField.value = id;
+    document.getElementById('loan-name').value = name;
+    document.getElementById('loan-balance').value = balance;
+    document.getElementById('loan-notes').value = notes || '';
+    loanSubmitBtn.textContent = 'Save Changes';
+    loanCancelEditBtn.style.display = 'inline-block';
+    window.scrollTo({ top: loanForm.offsetTop - 80, behavior: 'smooth' });
+  };
+
+  window.settleLoan = async function (id) {
+    if (!confirm('Mark this as fully settled? It will be removed from Net Worth but kept in history.')) return;
+    const { error } = await sb.from('loans').update({ is_closed: true }).eq('id', id);
+    if (error) { alert('Error: ' + error.message); return; }
+    await loadLoans();
+    await loadAccounts();
+  };
+
+  window.deleteLoan = async function (id) {
+    if (!confirm('Delete this record permanently?')) return;
+    const { error } = await sb.from('loans').delete().eq('id', id);
+    if (error) { alert('Error: ' + error.message); return; }
+    await loadLoans();
+    await loadAccounts();
+  };
 
   // ---------- PAGE NAVIGATION ----------
   document.querySelectorAll('.nav-item[data-page]').forEach(item => {
