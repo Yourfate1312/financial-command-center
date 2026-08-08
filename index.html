@@ -657,6 +657,83 @@
         <div class="section-title">By Sport</div>
         <div id="bet-by-sport" class="account-grid"></div>
 
+        <div class="section-title">Advanced Analytics</div>
+        <div class="summary-row" id="bet-adv-row-1">
+          <div class="summary-cell">
+            <div class="label">ROI</div>
+            <div class="value" id="bet-roi">—</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Avg Stake</div>
+            <div class="value" id="bet-avg-stake">—</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Avg Odds</div>
+            <div class="value" id="bet-avg-odds">—</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Total Bets</div>
+            <div class="value" id="bet-total-count">—</div>
+          </div>
+        </div>
+        <div class="summary-row" id="bet-adv-row-2">
+          <div class="summary-cell">
+            <div class="label">Biggest Win</div>
+            <div class="value" id="bet-biggest-win" style="color: var(--green);">—</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Biggest Loss</div>
+            <div class="value" id="bet-biggest-loss" style="color: var(--red);">—</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Longest Win Streak</div>
+            <div class="value" id="bet-win-streak" style="color: var(--green);">—</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Longest Loss Streak</div>
+            <div class="value" id="bet-loss-streak" style="color: var(--red);">—</div>
+          </div>
+        </div>
+        <div class="summary-row" id="bet-adv-row-3">
+          <div class="summary-cell">
+            <div class="label">Peak (Cumulative P&L)</div>
+            <div class="value amber" id="bet-peak">—</div>
+            <div class="sub">Not a wallet balance — see note below</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Current (Cumulative P&L)</div>
+            <div class="value amber" id="bet-current">—</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Max Drawdown</div>
+            <div class="value" id="bet-max-drawdown" style="color: var(--red);">—</div>
+          </div>
+        </div>
+        <p style="font-size:11px; color:var(--text-dim); margin:-4px 0 16px;">
+          "Peak" and "Current" above track cumulative net P&L from your logged bets, starting at ₹0 — not your actual wallet/bankroll, since that isn't tracked here. P&L by Betting Type (single/multi/system) isn't shown: the data has no structured field for bet type, only free-text notes, so it can't be computed reliably without adding a new column.
+        </p>
+
+        <div class="section-title">Cumulative P&L Over Time</div>
+        <div id="chart-cumulative-pl"></div>
+
+        <div class="section-title">Monthly P&L</div>
+        <div id="chart-monthly-pl"></div>
+
+        <div class="section-title">Monthly ROI</div>
+        <div id="chart-monthly-roi"></div>
+
+        <div class="section-title">P&L by Sport (Chart)</div>
+        <div id="chart-sport-pl"></div>
+
+        <div class="section-title">ROI by Sport</div>
+        <div id="chart-sport-roi"></div>
+
+        <div class="section-title">Drawdown</div>
+        <div id="chart-drawdown"></div>
+
+        <div class="section-title">Win / Loss Distribution</div>
+        <div id="chart-distribution"></div>
+
         <div class="section-title">Log a Bet</div>
         <form id="bet-form" class="txn-form">
           <input type="hidden" id="bet-id" value="">
@@ -1350,6 +1427,207 @@
     return 0; // loss or pending
   }
 
+  // ---------- GAMBLING ADVANCED ANALYTICS (additive, does not touch existing bet logic) ----------
+
+  function renderGamblingAdvancedAnalytics(bets) {
+    const settled = (bets || []).filter(b => b.outcome !== 'pending');
+
+    // Chronological order (oldest first) for streaks / cumulative series
+    const chrono = [...settled].sort((a, b) => {
+      if (a.bet_date !== b.bet_date) return a.bet_date.localeCompare(b.bet_date);
+      return (a.created_at || '').localeCompare(b.created_at || '');
+    });
+
+    if (chrono.length === 0) {
+      ['bet-roi','bet-avg-stake','bet-avg-odds','bet-biggest-win','bet-biggest-loss',
+       'bet-win-streak','bet-loss-streak','bet-peak','bet-current','bet-max-drawdown'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = '—';
+      });
+      const totalCountEl = document.getElementById('bet-total-count');
+      if (totalCountEl) totalCountEl.textContent = (bets || []).length;
+      ['chart-cumulative-pl','chart-monthly-pl','chart-monthly-roi','chart-sport-pl','chart-sport-roi','chart-drawdown','chart-distribution'].forEach(id => {
+        document.getElementById(id).innerHTML = `<div class="empty-state">No settled bets yet.</div>`;
+      });
+      return;
+    }
+
+    const staked = chrono.reduce((s, b) => s + Number(b.stake), 0);
+    const returned = chrono.reduce((s, b) => s + betPayout(b), 0);
+    const netPL = returned - staked;
+    const roi = staked > 0 ? (netPL / staked * 100) : 0;
+    const avgStake = staked / chrono.length;
+    const avgOdds = chrono.reduce((s, b) => s + Number(b.odds), 0) / chrono.length;
+
+    const perBetNet = chrono.map(b => ({ ...b, net: betPayout(b) - Number(b.stake) }));
+    const biggestWin = Math.max(...perBetNet.map(b => b.net));
+    const biggestLoss = Math.min(...perBetNet.map(b => b.net));
+
+    // Streaks (push breaks a streak without counting as either)
+    let curType = null, curStreak = 0, longestWin = 0, longestLoss = 0;
+    chrono.forEach(b => {
+      if (b.outcome === 'win') {
+        curType === 'win' ? curStreak++ : (curType = 'win', curStreak = 1);
+        longestWin = Math.max(longestWin, curStreak);
+      } else if (b.outcome === 'loss') {
+        curType === 'loss' ? curStreak++ : (curType = 'loss', curStreak = 1);
+        longestLoss = Math.max(longestLoss, curStreak);
+      } else {
+        curType = null; curStreak = 0;
+      }
+    });
+
+    // Cumulative P&L series + drawdown
+    let running = 0, peak = 0, maxDrawdown = 0;
+    const series = [];
+    perBetNet.forEach(b => {
+      running += b.net;
+      peak = Math.max(peak, running);
+      const dd = peak - running;
+      maxDrawdown = Math.max(maxDrawdown, dd);
+      series.push({ date: b.bet_date, value: running, drawdown: dd });
+    });
+    const currentVal = series[series.length - 1].value;
+    const peakVal = Math.max(0, ...series.map(s => s.value));
+
+    // Render summary cells
+    document.getElementById('bet-roi').textContent = roi.toFixed(1) + '%';
+    document.getElementById('bet-avg-stake').textContent = fmtINR(avgStake);
+    document.getElementById('bet-avg-odds').textContent = avgOdds.toFixed(2);
+    document.getElementById('bet-total-count').textContent = (bets || []).length;
+    document.getElementById('bet-biggest-win').textContent = '+' + fmtINR(biggestWin);
+    document.getElementById('bet-biggest-loss').textContent = fmtINR(biggestLoss);
+    document.getElementById('bet-win-streak').textContent = longestWin;
+    document.getElementById('bet-loss-streak').textContent = longestLoss;
+    document.getElementById('bet-peak').textContent = fmtINR(peakVal);
+    document.getElementById('bet-current').textContent = (currentVal >= 0 ? '+' : '') + fmtINR(currentVal);
+    document.getElementById('bet-max-drawdown').textContent = '−' + fmtINR(maxDrawdown);
+
+    // ---- Chart 1: Cumulative P&L over time (SVG line) ----
+    renderLineChart('chart-cumulative-pl', series.map(s => s.value), series.map(s => s.date), 'var(--amber)');
+
+    // ---- Chart 2: Monthly P&L (bar chart, green/red) ----
+    const monthly = {};
+    chrono.forEach(b => {
+      const key = b.bet_date.slice(0, 7);
+      if (!monthly[key]) monthly[key] = { staked: 0, returned: 0 };
+      monthly[key].staked += Number(b.stake);
+      monthly[key].returned += betPayout(b);
+    });
+    const monthKeys = Object.keys(monthly).sort();
+    const monthlyPL = monthKeys.map(k => monthly[k].returned - monthly[k].staked);
+    renderBarChart('chart-monthly-pl', monthKeys.map(k => k.slice(5) + '/' + k.slice(2, 4)), monthlyPL);
+
+    // ---- Chart 2b: Monthly ROI (%) ----
+    const monthlyROI = monthKeys.map(k => monthly[k].staked > 0 ? ((monthly[k].returned - monthly[k].staked) / monthly[k].staked * 100) : 0);
+    renderBarChart('chart-monthly-roi', monthKeys.map(k => k.slice(5) + '/' + k.slice(2, 4)), monthlyROI, '%');
+
+    // ---- Chart 3: P&L by Sport (bar chart) ----
+    const bySport = {};
+    chrono.forEach(b => {
+      if (!bySport[b.sport]) bySport[b.sport] = { staked: 0, returned: 0 };
+      bySport[b.sport].staked += Number(b.stake);
+      bySport[b.sport].returned += betPayout(b);
+    });
+    const sportKeys = Object.keys(bySport);
+    const sportPL = sportKeys.map(k => bySport[k].returned - bySport[k].staked);
+    renderBarChart('chart-sport-pl', sportKeys, sportPL);
+
+    // ---- Chart 3b: ROI by Sport (%) ----
+    const sportROI = sportKeys.map(k => bySport[k].staked > 0 ? ((bySport[k].returned - bySport[k].staked) / bySport[k].staked * 100) : 0);
+    renderBarChart('chart-sport-roi', sportKeys, sportROI, '%');
+
+    // ---- Chart 4: Drawdown (filled area, always >= 0, shown as negative dip) ----
+    renderAreaChart('chart-drawdown', series.map(s => -s.drawdown), series.map(s => s.date));
+
+    // ---- Chart 5: Win/Loss/Push distribution ----
+    const allOutcomes = { win: 0, loss: 0, push: 0, pending: 0 };
+    (bets || []).forEach(b => { allOutcomes[b.outcome]++; });
+    renderDistribution('chart-distribution', allOutcomes);
+  }
+
+  function renderLineChart(elId, values, labels, color) {
+    const el = document.getElementById(elId);
+    const w = 700, h = 140, pad = 10;
+    const min = Math.min(0, ...values), max = Math.max(0, ...values);
+    const range = (max - min) || 1;
+    const points = values.map((v, i) => {
+      const x = pad + (i / Math.max(1, values.length - 1)) * (w - pad * 2);
+      const y = h - pad - ((v - min) / range) * (h - pad * 2);
+      return `${x},${y}`;
+    }).join(' ');
+    const zeroY = h - pad - ((0 - min) / range) * (h - pad * 2);
+    el.innerHTML = `
+      <svg viewBox="0 0 ${w} ${h}" style="width:100%; height:${h}px; background:var(--panel); border:1px solid var(--border);">
+        <line x1="${pad}" y1="${zeroY}" x2="${w - pad}" y2="${zeroY}" stroke="var(--border)" stroke-dasharray="4,4"/>
+        <polyline points="${points}" fill="none" stroke="${color}" stroke-width="2"/>
+      </svg>
+      <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-dim); margin-top:4px;">
+        <span>${labels[0] || ''}</span><span>${labels[labels.length - 1] || ''}</span>
+      </div>
+    `;
+  }
+
+  function renderAreaChart(elId, values, labels) {
+    const el = document.getElementById(elId);
+    const w = 700, h = 100, pad = 10;
+    const min = Math.min(...values, 0), max = 0;
+    const range = (max - min) || 1;
+    const zeroY = pad;
+    const points = values.map((v, i) => {
+      const x = pad + (i / Math.max(1, values.length - 1)) * (w - pad * 2);
+      const y = pad + ((max - v) / range) * (h - pad * 2);
+      return `${x},${y}`;
+    });
+    const areaPath = `M${pad},${zeroY} L${points.join(' L')} L${w - pad},${zeroY} Z`;
+    el.innerHTML = `
+      <svg viewBox="0 0 ${w} ${h}" style="width:100%; height:${h}px; background:var(--panel); border:1px solid var(--border);">
+        <path d="${areaPath}" fill="var(--red)" opacity="0.25"/>
+        <polyline points="${points.join(' ')}" fill="none" stroke="var(--red)" stroke-width="1.5"/>
+      </svg>
+      <div style="font-size:10px; color:var(--text-dim); margin-top:4px;">Deeper dip = larger drawdown from peak</div>
+    `;
+  }
+
+  function renderBarChart(elId, labels, values, unit) {
+    const el = document.getElementById(elId);
+    const maxAbs = Math.max(...values.map(v => Math.abs(v)), 1);
+    const fmt = (v) => unit === '%' ? (v >= 0 ? '+' : '') + v.toFixed(1) + '%' : (v >= 0 ? '+' : '') + fmtINR(v);
+    el.innerHTML = `
+      <div style="background:var(--panel); border:1px solid var(--border); padding:16px;">
+        ${labels.map((lab, i) => {
+          const v = values[i];
+          const pct = (Math.abs(v) / maxAbs * 100).toFixed(0);
+          const color = v >= 0 ? 'var(--green)' : 'var(--red)';
+          return `
+            <div style="margin-bottom:8px;">
+              <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:3px;">
+                <span>${lab}</span><span style="color:${color};">${fmt(v)}</span>
+              </div>
+              <div style="background:var(--bg); border:1px solid var(--border); height:6px;">
+                <div style="background:${color}; height:100%; width:${pct}%;"></div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  function renderDistribution(elId, outcomes) {
+    const el = document.getElementById(elId);
+    const total = Object.values(outcomes).reduce((a, b) => a + b, 0) || 1;
+    const colors = { win: 'var(--green)', loss: 'var(--red)', push: 'var(--text-dim)', pending: 'var(--amber)' };
+    el.innerHTML = `
+      <div style="display:flex; height:24px; border:1px solid var(--border); overflow:hidden;">
+        ${Object.entries(outcomes).map(([k, v]) => v > 0 ? `<div style="width:${(v/total*100).toFixed(1)}%; background:${colors[k]};" title="${k}: ${v}"></div>` : '').join('')}
+      </div>
+      <div style="display:flex; gap:16px; font-size:11px; color:var(--text-dim); margin-top:8px;">
+        ${Object.entries(outcomes).map(([k, v]) => `<span><span style="color:${colors[k]};">■</span> ${k}: ${v}</span>`).join('')}
+      </div>
+    `;
+  }
+
   async function loadBets() {
     const listEl = document.getElementById('bet-list');
     const { data: bets, error } = await sb
@@ -1370,6 +1648,7 @@
       document.getElementById('bet-total-staked').textContent = fmtINR(0);
       document.getElementById('bet-total-returned').textContent = fmtINR(0);
       document.getElementById('bet-by-sport').innerHTML = '';
+      renderGamblingAdvancedAnalytics([]);
       return;
     }
 
@@ -1428,6 +1707,8 @@
         </div>
       </div>
     `).join('');
+
+    renderGamblingAdvancedAnalytics(bets);
   }
 
   window.editBet = function (b) {
