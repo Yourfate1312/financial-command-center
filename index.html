@@ -458,7 +458,12 @@
       <div class="nav-item" data-page="creditcards">Credit Cards</div>
       <div class="nav-item" data-page="investments">Investments</div>
       <div class="nav-item" data-page="rewards">Rewards</div>
-      <div class="nav-item">Analytics <span class="tag">soon</span></div>
+      <div class="nav-item" data-page="goals">Goals</div>
+      <div class="nav-item" data-page="analytics">Analytics</div>
+      <div class="nav-item" data-page="reports">Reports</div>
+      <div class="nav-item" data-page="calendar">Calendar</div>
+      <div class="nav-item" data-page="documents">Documents</div>
+      <div class="nav-item" data-page="settings">Settings</div>
     </div>
 
     <div class="main">
@@ -901,6 +906,135 @@
         <div class="section-title">Your Rewards</div>
         <div id="reward-list"><div class="loading-state">Loading…</div></div>
       </div>
+
+      <div id="page-goals" class="page" style="display:none;">
+        <div class="section-title">Add Goal</div>
+        <form id="goal-form" class="txn-form">
+          <input type="hidden" id="goal-id" value="">
+          <div class="txn-form-grid">
+            <div class="field">
+              <label for="goal-name">Goal Name</label>
+              <input type="text" id="goal-name" placeholder="e.g. Emergency Fund" required>
+            </div>
+            <div class="field">
+              <label for="goal-target">Target Amount (₹)</label>
+              <input type="number" id="goal-target" min="1" step="0.01" required>
+            </div>
+            <div class="field">
+              <label for="goal-current">Current Amount (₹)</label>
+              <input type="number" id="goal-current" min="0" step="0.01" required>
+            </div>
+            <div class="field">
+              <label for="goal-date">Target Date (optional)</label>
+              <input type="date" id="goal-date">
+            </div>
+            <div class="field">
+              <label for="goal-notes">Notes (optional)</label>
+              <input type="text" id="goal-notes">
+            </div>
+          </div>
+          <div class="txn-form-actions">
+            <button type="submit" class="btn-primary" id="goal-submit-btn" style="width:auto; padding:11px 28px;">Add Goal</button>
+            <button type="button" class="btn-ghost" id="goal-cancel-edit-btn" style="display:none;">Cancel Edit</button>
+          </div>
+          <div class="login-error" id="goal-error"></div>
+        </form>
+        <div class="section-title">Your Goals</div>
+        <div id="goal-list"><div class="loading-state">Loading…</div></div>
+      </div>
+
+      <div id="page-analytics" class="page" style="display:none;">
+        <div class="section-title">Income vs Expense (Last 6 Months)</div>
+        <div id="analytics-trend"><div class="loading-state">Loading…</div></div>
+        <div class="section-title">Expense Breakdown by Category (All Time)</div>
+        <div id="analytics-categories"><div class="loading-state">Loading…</div></div>
+      </div>
+
+      <div id="page-reports" class="page" style="display:none;">
+        <div class="section-title">Monthly Summary</div>
+        <div class="txn-form" style="margin-bottom:20px;">
+          <div class="field" style="max-width:220px;">
+            <label for="report-month">Select Month</label>
+            <input type="month" id="report-month">
+          </div>
+          <button type="button" class="btn-primary" id="report-generate-btn" style="width:auto; padding:11px 28px; margin-top:10px;">Generate Report</button>
+        </div>
+        <div id="report-output"></div>
+        <div class="section-title">Export</div>
+        <button type="button" class="btn-ghost" id="export-csv-btn">Download All Transactions (CSV)</button>
+      </div>
+
+      <div id="page-calendar" class="page" style="display:none;">
+        <div class="section-title">Upcoming (Next 30 Days)</div>
+        <div id="calendar-list"><div class="loading-state">Loading…</div></div>
+      </div>
+
+      <div id="page-documents" class="page" style="display:none;">
+        <div class="section-title">Add Document Reference</div>
+        <div class="login-error" style="display:block; background:rgba(255,176,32,0.08); border-color:var(--amber-dim); color:var(--amber); margin-bottom:16px;">
+          This tracks links/names only — files themselves stay wherever you already store them (e.g. Google Drive). Not a file upload vault.
+        </div>
+        <form id="doc-form" class="txn-form">
+          <input type="hidden" id="doc-id" value="">
+          <div class="txn-form-grid">
+            <div class="field">
+              <label for="doc-name">Document Name</label>
+              <input type="text" id="doc-name" placeholder="e.g. Health Insurance Policy" required>
+            </div>
+            <div class="field">
+              <label for="doc-category">Category</label>
+              <select id="doc-category">
+                <option>Insurance</option>
+                <option>Investment Certificate</option>
+                <option>Tax</option>
+                <option>Identity</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="doc-url">Link (Google Drive, etc.)</label>
+              <input type="url" id="doc-url" placeholder="https://drive.google.com/...">
+            </div>
+            <div class="field">
+              <label for="doc-notes">Notes (optional)</label>
+              <input type="text" id="doc-notes">
+            </div>
+          </div>
+          <div class="txn-form-actions">
+            <button type="submit" class="btn-primary" id="doc-submit-btn" style="width:auto; padding:11px 28px;">Add</button>
+            <button type="button" class="btn-ghost" id="doc-cancel-edit-btn" style="display:none;">Cancel Edit</button>
+          </div>
+          <div class="login-error" id="doc-error"></div>
+        </form>
+        <div class="section-title">Your Documents</div>
+        <div id="doc-list"><div class="loading-state">Loading…</div></div>
+      </div>
+
+      <div id="page-settings" class="page" style="display:none;">
+        <div class="section-title">Account</div>
+        <div class="txn-form" style="margin-bottom:20px;">
+          <div class="field"><label>Email</label><div style="padding:11px 0; font-size:13px;" id="settings-email">—</div></div>
+        </div>
+
+        <div class="section-title">Change Password</div>
+        <form id="password-form" class="txn-form">
+          <div class="txn-form-grid">
+            <div class="field">
+              <label for="new-password">New Password</label>
+              <input type="password" id="new-password" minlength="6" required>
+            </div>
+          </div>
+          <button type="submit" class="btn-primary" style="width:auto; padding:11px 28px;">Update Password</button>
+          <div class="login-error" id="password-error"></div>
+          <div class="login-error" id="password-success" style="color:var(--green); display:none;"></div>
+        </form>
+
+        <div class="section-title">Data Backup</div>
+        <button type="button" class="btn-ghost" id="export-all-btn">Download Full Backup (JSON)</button>
+        <p style="font-size:11px; color:var(--text-dim); margin-top:10px;">
+          Exports everything: accounts, transactions, bets, trades, loans, investments, rewards, goals. Keep this somewhere safe.
+        </p>
+      </div>
     </div>
   </div>
 </div>
@@ -965,6 +1099,11 @@
     await loadCreditCards();
     await loadInvestments();
     await loadRewards();
+    await loadGoals();
+    await loadAnalytics();
+    await loadCalendar();
+    await loadDocuments();
+    await loadSettings();
     await loadDashboard();
   }
 
@@ -1732,6 +1871,359 @@
     if (error) { alert('Error: ' + error.message); return; }
     await loadRewards();
   };
+
+  // ---------- GOALS ----------
+
+  const goalForm = document.getElementById('goal-form');
+  const goalError = document.getElementById('goal-error');
+  const goalSubmitBtn = document.getElementById('goal-submit-btn');
+  const goalCancelEditBtn = document.getElementById('goal-cancel-edit-btn');
+  const goalIdField = document.getElementById('goal-id');
+
+  goalCancelEditBtn.addEventListener('click', () => resetGoalForm());
+
+  function resetGoalForm() {
+    goalIdField.value = '';
+    goalForm.reset();
+    goalSubmitBtn.textContent = 'Add Goal';
+    goalCancelEditBtn.style.display = 'none';
+    goalError.style.display = 'none';
+  }
+
+  goalForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    goalError.style.display = 'none';
+    const { data: { user } } = await sb.auth.getUser();
+    const payload = {
+      user_id: user.id,
+      name: document.getElementById('goal-name').value,
+      target_amount: parseFloat(document.getElementById('goal-target').value),
+      current_amount: parseFloat(document.getElementById('goal-current').value),
+      target_date: document.getElementById('goal-date').value || null,
+      notes: document.getElementById('goal-notes').value || null
+    };
+    const editId = goalIdField.value;
+    let error;
+    if (editId) {
+      ({ error } = await sb.from('goals').update(payload).eq('id', editId));
+    } else {
+      ({ error } = await sb.from('goals').insert(payload));
+    }
+    if (error) { goalError.textContent = error.message; goalError.style.display = 'block'; return; }
+    resetGoalForm();
+    await loadGoals();
+  });
+
+  async function loadGoals() {
+    const { data: goals, error } = await sb.from('goals').select('*').order('created_at', { ascending: false });
+    const listEl = document.getElementById('goal-list');
+    if (error) { listEl.innerHTML = `<div class="empty-state">Error: ${error.message}</div>`; return; }
+    if (!goals || goals.length === 0) { listEl.innerHTML = `<div class="empty-state">No goals yet.</div>`; return; }
+
+    listEl.innerHTML = goals.map(g => {
+      const pct = Math.min(100, (g.current_amount / g.target_amount * 100)).toFixed(0);
+      return `
+        <div class="account-card" style="margin-bottom:10px;">
+          <div class="type-badge">${g.is_achieved ? 'achieved' : (g.target_date || 'ongoing')}</div>
+          <div class="name">${g.name}</div>
+          <div style="background:var(--bg); border:1px solid var(--border); height:8px; margin:10px 0;">
+            <div style="background:var(--amber); height:100%; width:${pct}%;"></div>
+          </div>
+          <div class="meta">
+            <span>${fmtINR(g.current_amount)} / ${fmtINR(g.target_amount)}</span>
+            <span>${pct}%</span>
+          </div>
+          <div class="txn-row-actions" style="margin-top:10px; justify-content:flex-start;">
+            <button type="button" onclick='editGoal(${JSON.stringify(g)})'>Edit</button>
+            <button type="button" class="delete" onclick="deleteGoal('${g.id}')">Delete</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  window.editGoal = function (g) {
+    goalIdField.value = g.id;
+    document.getElementById('goal-name').value = g.name;
+    document.getElementById('goal-target').value = g.target_amount;
+    document.getElementById('goal-current').value = g.current_amount;
+    document.getElementById('goal-date').value = g.target_date || '';
+    document.getElementById('goal-notes').value = g.notes || '';
+    goalSubmitBtn.textContent = 'Save Changes';
+    goalCancelEditBtn.style.display = 'inline-block';
+    window.scrollTo({ top: goalForm.offsetTop - 80, behavior: 'smooth' });
+  };
+
+  window.deleteGoal = async function (id) {
+    if (!confirm('Delete this goal permanently?')) return;
+    const { error } = await sb.from('goals').delete().eq('id', id);
+    if (error) { alert('Error: ' + error.message); return; }
+    await loadGoals();
+  };
+
+  // ---------- ANALYTICS ----------
+
+  async function loadAnalytics() {
+    const { data: txns } = await sb.from('transactions').select('*');
+    const trendEl = document.getElementById('analytics-trend');
+    const catEl = document.getElementById('analytics-categories');
+
+    if (!txns || txns.length === 0) {
+      trendEl.innerHTML = `<div class="empty-state">No transactions yet.</div>`;
+      catEl.innerHTML = '';
+      return;
+    }
+
+    // Last 6 months income vs expense
+    const now = new Date();
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: d.toLocaleString('default', { month: 'short' }) });
+    }
+    const monthData = months.map(m => {
+      const inc = txns.filter(t => t.type === 'income' && t.txn_date.startsWith(m.key)).reduce((s, t) => s + Number(t.amount), 0);
+      const exp = txns.filter(t => t.type === 'expense' && t.txn_date.startsWith(m.key)).reduce((s, t) => s + Number(t.amount), 0);
+      return { ...m, inc, exp };
+    });
+    const maxVal = Math.max(...monthData.map(m => Math.max(m.inc, m.exp)), 1);
+
+    trendEl.innerHTML = `
+      <div style="display:flex; gap:16px; align-items:flex-end; height:160px; padding:16px; background:var(--panel); border:1px solid var(--border);">
+        ${monthData.map(m => `
+          <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;">
+            <div style="display:flex; gap:3px; align-items:flex-end; height:110px;">
+              <div style="width:12px; background:var(--green); height:${(m.inc / maxVal * 100).toFixed(0)}%;" title="Income: ${fmtINR(m.inc)}"></div>
+              <div style="width:12px; background:var(--red); height:${(m.exp / maxVal * 100).toFixed(0)}%;" title="Expense: ${fmtINR(m.exp)}"></div>
+            </div>
+            <div style="font-size:10px; color:var(--text-dim);">${m.label}</div>
+          </div>
+        `).join('')}
+      </div>
+      <div style="font-size:10px; color:var(--text-dim); margin-top:8px;">
+        <span style="color:var(--green);">■</span> Income &nbsp; <span style="color:var(--red);">■</span> Expense
+      </div>
+    `;
+
+    // Category breakdown, all time, expenses only
+    const catTotals = {};
+    txns.filter(t => t.type === 'expense').forEach(t => { catTotals[t.category] = (catTotals[t.category] || 0) + Number(t.amount); });
+    const sorted = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
+    const catMax = sorted.length ? sorted[0][1] : 1;
+
+    catEl.innerHTML = sorted.length ? sorted.map(([cat, amt]) => `
+      <div style="margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+          <span>${cat}</span><span>${fmtINR(amt)}</span>
+        </div>
+        <div style="background:var(--bg); border:1px solid var(--border); height:6px;">
+          <div style="background:var(--amber); height:100%; width:${(amt / catMax * 100).toFixed(0)}%;"></div>
+        </div>
+      </div>
+    `).join('') : `<div class="empty-state">No expenses logged yet.</div>`;
+  }
+
+  // ---------- REPORTS ----------
+
+  document.getElementById('report-month').value = new Date().toISOString().slice(0, 7);
+
+  document.getElementById('report-generate-btn').addEventListener('click', async () => {
+    const month = document.getElementById('report-month').value; // YYYY-MM
+    const { data: txns } = await sb.from('transactions').select('*').gte('txn_date', month + '-01').lte('txn_date', month + '-31');
+    const outputEl = document.getElementById('report-output');
+
+    const income = (txns || []).filter(t => t.type === 'income');
+    const expenses = (txns || []).filter(t => t.type === 'expense');
+    const incomeTotal = income.reduce((s, t) => s + Number(t.amount), 0);
+    const expenseTotal = expenses.reduce((s, t) => s + Number(t.amount), 0);
+
+    outputEl.innerHTML = `
+      <div class="summary-row" style="margin-bottom:16px;">
+        <div class="summary-cell"><div class="label">Income</div><div class="value" style="color:var(--green);">${fmtINR(incomeTotal)}</div></div>
+        <div class="summary-cell"><div class="label">Expenses</div><div class="value" style="color:var(--red);">${fmtINR(expenseTotal)}</div></div>
+        <div class="summary-cell"><div class="label">Net</div><div class="value amber">${fmtINR(incomeTotal - expenseTotal)}</div></div>
+      </div>
+      <div>${(txns && txns.length) ? txns.map(t => `
+        <div class="txn-row">
+          <div class="txn-date">${t.txn_date}</div>
+          <div class="txn-cat">${t.category}</div>
+          <div></div>
+          <div class="txn-amount ${t.type}">${t.type === 'income' ? '+' : '−'}${fmtINR(t.amount)}</div>
+          <div></div>
+        </div>
+      `).join('') : `<div class="empty-state">No transactions for this month.</div>`}</div>
+    `;
+  });
+
+  document.getElementById('export-csv-btn').addEventListener('click', async () => {
+    const { data: txns } = await sb.from('transactions').select('*, accounts(name)').order('txn_date');
+    let csv = 'Date,Type,Category,Amount,Account,Note\n';
+    (txns || []).forEach(t => {
+      csv += `${t.txn_date},${t.type},"${t.category}",${t.amount},"${t.accounts?.name || ''}","${(t.note || '').replace(/"/g, '""')}"\n`;
+    });
+    downloadFile(csv, 'transactions.csv', 'text/csv');
+  });
+
+  function downloadFile(content, filename, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ---------- CALENDAR ----------
+
+  async function loadCalendar() {
+    const listEl = document.getElementById('calendar-list');
+    const now = new Date();
+    const in30 = new Date(now.getTime() + 30 * 86400000);
+    const items = [];
+
+    const { data: cards } = await sb.from('accounts').select('*').eq('type', 'credit_card');
+    (cards || []).forEach(c => {
+      if (c.due_date && new Date(c.due_date) <= in30 && new Date(c.due_date) >= now) {
+        items.push({ date: c.due_date, label: `${c.name} payment due`, sub: fmtINR(c.balance) });
+      }
+    });
+
+    const { data: goals } = await sb.from('goals').select('*').eq('is_achieved', false);
+    (goals || []).forEach(g => {
+      if (g.target_date && new Date(g.target_date) <= in30 && new Date(g.target_date) >= now) {
+        items.push({ date: g.target_date, label: `Goal target: ${g.name}`, sub: `${fmtINR(g.current_amount)} / ${fmtINR(g.target_amount)}` });
+      }
+    });
+
+    const { data: rewards } = await sb.from('rewards').select('*');
+    (rewards || []).forEach(r => {
+      if (r.expiry_date && new Date(r.expiry_date) <= in30 && new Date(r.expiry_date) >= now) {
+        items.push({ date: r.expiry_date, label: `${r.brand} points expiring`, sub: `${r.balance} pts` });
+      }
+    });
+
+    items.sort((a, b) => a.date.localeCompare(b.date));
+
+    listEl.innerHTML = items.length ? items.map(i => `
+      <div class="txn-row" style="grid-template-columns: 100px 1fr auto;">
+        <div class="txn-date">${i.date}</div>
+        <div class="txn-cat">${i.label}</div>
+        <div class="txn-account">${i.sub}</div>
+      </div>
+    `).join('') : `<div class="empty-state">Nothing due in the next 30 days.</div>`;
+  }
+
+  // ---------- DOCUMENTS ----------
+
+  const docForm = document.getElementById('doc-form');
+  const docError = document.getElementById('doc-error');
+  const docSubmitBtn = document.getElementById('doc-submit-btn');
+  const docCancelEditBtn = document.getElementById('doc-cancel-edit-btn');
+  const docIdField = document.getElementById('doc-id');
+
+  docCancelEditBtn.addEventListener('click', () => resetDocForm());
+
+  function resetDocForm() {
+    docIdField.value = '';
+    docForm.reset();
+    docSubmitBtn.textContent = 'Add';
+    docCancelEditBtn.style.display = 'none';
+    docError.style.display = 'none';
+  }
+
+  docForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    docError.style.display = 'none';
+    const { data: { user } } = await sb.auth.getUser();
+    const payload = {
+      user_id: user.id,
+      name: document.getElementById('doc-name').value,
+      category: document.getElementById('doc-category').value,
+      url: document.getElementById('doc-url').value || null,
+      notes: document.getElementById('doc-notes').value || null
+    };
+    const editId = docIdField.value;
+    let error;
+    if (editId) {
+      ({ error } = await sb.from('documents').update(payload).eq('id', editId));
+    } else {
+      ({ error } = await sb.from('documents').insert(payload));
+    }
+    if (error) { docError.textContent = error.message; docError.style.display = 'block'; return; }
+    resetDocForm();
+    await loadDocuments();
+  });
+
+  async function loadDocuments() {
+    const { data: docs, error } = await sb.from('documents').select('*').order('created_at', { ascending: false });
+    const listEl = document.getElementById('doc-list');
+    if (error) { listEl.innerHTML = `<div class="empty-state">Error: ${error.message}</div>`; return; }
+    if (!docs || docs.length === 0) { listEl.innerHTML = `<div class="empty-state">No documents tracked yet.</div>`; return; }
+
+    listEl.innerHTML = docs.map(d => `
+      <div class="txn-row" style="grid-template-columns: 1fr 120px auto;">
+        <div>
+          <span class="txn-cat">${d.name}</span>
+          <span class="txn-note">${d.category}${d.notes ? ' · ' + d.notes : ''}</span>
+        </div>
+        <div class="txn-account">${d.url ? `<a href="${d.url}" target="_blank" style="color:var(--amber);">Open</a>` : '—'}</div>
+        <div class="txn-row-actions">
+          <button type="button" onclick='editDoc(${JSON.stringify(d)})'>Edit</button>
+          <button type="button" class="delete" onclick="deleteDoc('${d.id}')">Delete</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  window.editDoc = function (d) {
+    docIdField.value = d.id;
+    document.getElementById('doc-name').value = d.name;
+    document.getElementById('doc-category').value = d.category;
+    document.getElementById('doc-url').value = d.url || '';
+    document.getElementById('doc-notes').value = d.notes || '';
+    docSubmitBtn.textContent = 'Save Changes';
+    docCancelEditBtn.style.display = 'inline-block';
+    window.scrollTo({ top: docForm.offsetTop - 80, behavior: 'smooth' });
+  };
+
+  window.deleteDoc = async function (id) {
+    if (!confirm('Delete this document reference permanently?')) return;
+    const { error } = await sb.from('documents').delete().eq('id', id);
+    if (error) { alert('Error: ' + error.message); return; }
+    await loadDocuments();
+  };
+
+  // ---------- SETTINGS ----------
+
+  async function loadSettings() {
+    const { data: { user } } = await sb.auth.getUser();
+    document.getElementById('settings-email').textContent = user.email;
+  }
+
+  document.getElementById('password-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById('password-error');
+    const okEl = document.getElementById('password-success');
+    errEl.style.display = 'none';
+    okEl.style.display = 'none';
+
+    const newPassword = document.getElementById('new-password').value;
+    const { error } = await sb.auth.updateUser({ password: newPassword });
+    if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+    okEl.textContent = 'Password updated successfully.';
+    okEl.style.display = 'block';
+    document.getElementById('password-form').reset();
+  });
+
+  document.getElementById('export-all-btn').addEventListener('click', async () => {
+    const tables = ['accounts', 'transactions', 'bets', 'trades', 'loans', 'investments', 'rewards', 'goals', 'documents'];
+    const backup = {};
+    for (const t of tables) {
+      const { data } = await sb.from(t).select('*');
+      backup[t] = data || [];
+    }
+    downloadFile(JSON.stringify(backup, null, 2), `fcc-backup-${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
+  });
 
   // ---------- DASHBOARD ----------
 
