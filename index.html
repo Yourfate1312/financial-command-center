@@ -452,7 +452,6 @@
       <div class="nav-item active" data-page="accounts">Accounts</div>
       <div class="nav-item" data-page="transactions">Transactions</div>
       <div class="nav-item" data-page="loans">Debtors &amp; Creditors</div>
-      <div class="nav-item" data-page="loans">Loans</div>
       <div class="nav-item">Trading <span class="tag">soon</span></div>
       <div class="nav-item">Credit Cards <span class="tag">soon</span></div>
       <div class="nav-item">Gambling <span class="tag">soon</span></div>
@@ -467,7 +466,7 @@
           <div class="summary-cell">
             <div class="label">Net Worth</div>
             <div class="value amber" id="net-worth-value">—</div>
-            <div class="sub">Banks + Cash + Debtors − Creditors</div>
+            <div class="sub">Banks + Cash</div>
           </div>
           <div class="summary-cell">
             <div class="label">Accounts</div>
@@ -784,8 +783,6 @@
     const creditorsTotal = creditors.reduce((s, l) => s + Number(l.balance), 0);
     document.getElementById('debtors-total').textContent = fmtINR(debtorsTotal);
     document.getElementById('creditors-total').textContent = fmtINR(creditorsTotal);
-
-    return { debtorsTotal, creditorsTotal };
   }
 
   function renderLoanRow(l) {
