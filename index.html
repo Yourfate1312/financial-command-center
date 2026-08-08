@@ -454,7 +454,7 @@
       <div class="nav-item" data-page="transactions">Transactions</div>
       <div class="nav-item" data-page="loans">Debtors &amp; Creditors</div>
       <div class="nav-item" data-page="gambling">Gambling</div>
-      <div class="nav-item">Trading <span class="tag">soon</span></div>
+      <div class="nav-item" data-page="trading">Trading</div>
       <div class="nav-item">Credit Cards <span class="tag">soon</span></div>
       <div class="nav-item">Investments <span class="tag">soon</span></div>
       <div class="nav-item">Rewards <span class="tag">soon</span></div>
@@ -490,6 +490,11 @@
             <div class="type-badge">gambling</div>
             <div class="name">Betting P/L (All-time)</div>
             <div class="balance" id="dash-gambling-pl">—</div>
+          </div>
+          <div class="account-card">
+            <div class="type-badge">trading</div>
+            <div class="name">Trading P/L (All-time)</div>
+            <div class="balance" id="dash-trading-pl">—</div>
           </div>
           <div class="account-card">
             <div class="type-badge">debtors</div>
@@ -700,6 +705,69 @@
         <div class="section-title">Bet History</div>
         <div id="bet-list"><div class="loading-state">Loading bets…</div></div>
       </div>
+
+      <div id="page-trading" class="page" style="display:none;">
+        <div class="summary-row">
+          <div class="summary-cell">
+            <div class="label">Net P/L</div>
+            <div class="value" id="trade-net-pl">—</div>
+            <div class="sub">All-time, excluded from net worth</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Win Rate</div>
+            <div class="value" id="trade-win-rate">—</div>
+            <div class="sub" id="trade-win-count">—</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Total Invested</div>
+            <div class="value" id="trade-total-invested">—</div>
+            <div class="sub">Sum of buy value across trades</div>
+          </div>
+        </div>
+
+        <div class="section-title">Log a Closed Trade</div>
+        <form id="trade-form" class="txn-form">
+          <input type="hidden" id="trade-id" value="">
+          <div class="txn-form-grid">
+            <div class="field">
+              <label for="trade-symbol">Symbol</label>
+              <input type="text" id="trade-symbol" placeholder="e.g. RELIANCE, NIFTY, BTC" required>
+            </div>
+            <div class="field">
+              <label for="trade-qty">Quantity</label>
+              <input type="number" id="trade-qty" min="0.0001" step="0.0001" required>
+            </div>
+            <div class="field">
+              <label for="trade-buy-price">Buy Price (₹)</label>
+              <input type="number" id="trade-buy-price" min="0.01" step="0.01" required>
+            </div>
+            <div class="field">
+              <label for="trade-sell-price">Sell Price (₹)</label>
+              <input type="number" id="trade-sell-price" min="0.01" step="0.01" required>
+            </div>
+            <div class="field">
+              <label for="trade-buy-date">Buy Date</label>
+              <input type="date" id="trade-buy-date" required>
+            </div>
+            <div class="field">
+              <label for="trade-sell-date">Sell Date</label>
+              <input type="date" id="trade-sell-date" required>
+            </div>
+            <div class="field">
+              <label for="trade-notes">Notes (optional)</label>
+              <input type="text" id="trade-notes" placeholder="e.g. swing trade, earnings play">
+            </div>
+          </div>
+          <div class="txn-form-actions">
+            <button type="submit" class="btn-primary" id="trade-submit-btn" style="width:auto; padding:11px 28px;">Add Trade</button>
+            <button type="button" class="btn-ghost" id="trade-cancel-edit-btn" style="display:none;">Cancel Edit</button>
+          </div>
+          <div class="login-error" id="trade-error"></div>
+        </form>
+
+        <div class="section-title">Trade History</div>
+        <div id="trade-list"><div class="loading-state">Loading trades…</div></div>
+      </div>
     </div>
   </div>
 </div>
@@ -760,6 +828,7 @@
     await loadTransactions();
     await loadLoans();
     await loadBets();
+    await loadTrades();
     await loadDashboard();
   }
 
@@ -1106,6 +1175,144 @@
     await loadBets();
   };
 
+  // ---------- TRADING ----------
+
+  const tradeForm = document.getElementById('trade-form');
+  const tradeError = document.getElementById('trade-error');
+  const tradeSubmitBtn = document.getElementById('trade-submit-btn');
+  const tradeCancelEditBtn = document.getElementById('trade-cancel-edit-btn');
+  const tradeIdField = document.getElementById('trade-id');
+
+  document.getElementById('trade-buy-date').valueAsDate = new Date();
+  document.getElementById('trade-sell-date').valueAsDate = new Date();
+
+  tradeCancelEditBtn.addEventListener('click', () => resetTradeForm());
+
+  function resetTradeForm() {
+    tradeIdField.value = '';
+    tradeForm.reset();
+    document.getElementById('trade-buy-date').valueAsDate = new Date();
+    document.getElementById('trade-sell-date').valueAsDate = new Date();
+    tradeSubmitBtn.textContent = 'Add Trade';
+    tradeCancelEditBtn.style.display = 'none';
+    tradeError.style.display = 'none';
+  }
+
+  tradeForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    tradeError.style.display = 'none';
+
+    const { data: { user } } = await sb.auth.getUser();
+    const payload = {
+      user_id: user.id,
+      symbol: document.getElementById('trade-symbol').value.toUpperCase(),
+      quantity: parseFloat(document.getElementById('trade-qty').value),
+      buy_price: parseFloat(document.getElementById('trade-buy-price').value),
+      sell_price: parseFloat(document.getElementById('trade-sell-price').value),
+      buy_date: document.getElementById('trade-buy-date').value,
+      sell_date: document.getElementById('trade-sell-date').value,
+      notes: document.getElementById('trade-notes').value || null
+    };
+
+    const editId = tradeIdField.value;
+    let error;
+    if (editId) {
+      ({ error } = await sb.from('trades').update(payload).eq('id', editId));
+    } else {
+      ({ error } = await sb.from('trades').insert(payload));
+    }
+
+    if (error) {
+      tradeError.textContent = error.message;
+      tradeError.style.display = 'block';
+      return;
+    }
+
+    resetTradeForm();
+    await loadTrades();
+    await loadDashboard();
+  });
+
+  function tradePL(t) {
+    return (Number(t.sell_price) - Number(t.buy_price)) * Number(t.quantity);
+  }
+
+  async function loadTrades() {
+    const listEl = document.getElementById('trade-list');
+    const { data: trades, error } = await sb
+      .from('trades')
+      .select('*')
+      .order('sell_date', { ascending: false });
+
+    if (error) {
+      listEl.innerHTML = `<div class="empty-state">Error loading trades: ${error.message}</div>`;
+      return;
+    }
+
+    if (!trades || trades.length === 0) {
+      listEl.innerHTML = `<div class="empty-state">No trades logged yet.</div>`;
+      document.getElementById('trade-net-pl').textContent = fmtINR(0);
+      document.getElementById('trade-win-rate').textContent = '—';
+      document.getElementById('trade-win-count').textContent = '—';
+      document.getElementById('trade-total-invested').textContent = fmtINR(0);
+      return;
+    }
+
+    const totalPL = trades.reduce((s, t) => s + tradePL(t), 0);
+    const totalInvested = trades.reduce((s, t) => s + Number(t.buy_price) * Number(t.quantity), 0);
+    const wins = trades.filter(t => tradePL(t) > 0).length;
+    const winRate = (wins / trades.length * 100).toFixed(1);
+
+    const netPLEl = document.getElementById('trade-net-pl');
+    netPLEl.textContent = (totalPL >= 0 ? '+' : '') + fmtINR(totalPL);
+    netPLEl.style.color = totalPL >= 0 ? 'var(--green)' : 'var(--red)';
+
+    document.getElementById('trade-win-rate').textContent = winRate + '%';
+    document.getElementById('trade-win-count').textContent = `${wins}/${trades.length} profitable`;
+    document.getElementById('trade-total-invested').textContent = fmtINR(totalInvested);
+
+    listEl.innerHTML = trades.map(t => {
+      const pl = tradePL(t);
+      return `
+        <div class="txn-row" style="grid-template-columns: 90px 1fr 110px 100px auto;">
+          <div class="txn-date">${t.sell_date}</div>
+          <div>
+            <span class="txn-cat">${t.symbol}</span>
+            <span class="txn-note">${t.quantity} qty @ ${fmtINR(t.buy_price)} → ${fmtINR(t.sell_price)}${t.notes ? ' · ' + t.notes : ''}</span>
+          </div>
+          <div class="txn-account">${t.buy_date} → ${t.sell_date}</div>
+          <div class="txn-amount ${pl >= 0 ? 'income' : 'expense'}">${pl >= 0 ? '+' : ''}${fmtINR(pl)}</div>
+          <div class="txn-row-actions">
+            <button type="button" onclick='editTrade(${JSON.stringify(t)})'>Edit</button>
+            <button type="button" class="delete" onclick="deleteTrade('${t.id}')">Delete</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  window.editTrade = function (t) {
+    tradeIdField.value = t.id;
+    document.getElementById('trade-symbol').value = t.symbol;
+    document.getElementById('trade-qty').value = t.quantity;
+    document.getElementById('trade-buy-price').value = t.buy_price;
+    document.getElementById('trade-sell-price').value = t.sell_price;
+    document.getElementById('trade-buy-date').value = t.buy_date;
+    document.getElementById('trade-sell-date').value = t.sell_date;
+    document.getElementById('trade-notes').value = t.notes || '';
+    tradeSubmitBtn.textContent = 'Save Changes';
+    tradeCancelEditBtn.style.display = 'inline-block';
+    window.scrollTo({ top: tradeForm.offsetTop - 80, behavior: 'smooth' });
+  };
+
+  window.deleteTrade = async function (id) {
+    if (!confirm('Delete this trade permanently?')) return;
+    const { error } = await sb.from('trades').delete().eq('id', id);
+    if (error) { alert('Error: ' + error.message); return; }
+    await loadTrades();
+    await loadDashboard();
+  };
+
   // ---------- DASHBOARD ----------
 
   async function loadDashboard() {
@@ -1165,6 +1372,13 @@
     const glEl = document.getElementById('dash-gambling-pl');
     glEl.textContent = (betPL >= 0 ? '+' : '') + fmtINR(betPL);
     glEl.style.color = betPL >= 0 ? 'var(--green)' : 'var(--red)';
+
+    // Trading pulse (all-time)
+    const { data: trades } = await sb.from('trades').select('*');
+    const tradePLTotal = (trades || []).reduce((s, t) => s + tradePL(t), 0);
+    const tpEl = document.getElementById('dash-trading-pl');
+    tpEl.textContent = (tradePLTotal >= 0 ? '+' : '') + fmtINR(tradePLTotal);
+    tpEl.style.color = tradePLTotal >= 0 ? 'var(--green)' : 'var(--red)';
 
     // Recent activity: last 8 transactions across the board
     const { data: recentTxns } = await sb
