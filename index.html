@@ -510,9 +510,9 @@
       <div id="page-accounts" class="page" style="display:none;">
         <div class="summary-row" id="summary-row">
           <div class="summary-cell">
-            <div class="label">Net Worth</div>
+            <div class="label">Accounts Total</div>
             <div class="value amber" id="net-worth-value">—</div>
-            <div class="sub">Banks + Cash</div>
+            <div class="sub">Banks + Cash (this page only)</div>
           </div>
           <div class="summary-cell">
             <div class="label">Accounts</div>
@@ -802,16 +802,9 @@
     `;
   }
 
-  async function updateSummary(accounts) {
+  function updateSummary(accounts) {
     const accountsTotal = accounts.reduce((sum, a) => sum + Number(a.balance), 0);
-
-    const { data: loans } = await sb.from('loans').select('type, balance').eq('is_closed', false);
-    const debtorsTotal = (loans || []).filter(l => l.type === 'debtor').reduce((s, l) => s + Number(l.balance), 0);
-    const creditorsTotal = (loans || []).filter(l => l.type === 'creditor').reduce((s, l) => s + Number(l.balance), 0);
-
-    const netWorth = accountsTotal + debtorsTotal - creditorsTotal;
-
-    document.getElementById('net-worth-value').textContent = fmtINR(netWorth);
+    document.getElementById('net-worth-value').textContent = fmtINR(accountsTotal);
     document.getElementById('included-count-value').textContent = accounts.length;
   }
 
