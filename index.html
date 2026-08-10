@@ -537,6 +537,51 @@
         <div class="account-grid" id="included-accounts">
           <div class="loading-state">Loading accounts…</div>
         </div>
+
+        <div class="section-title">Add / Edit Account</div>
+        <form id="account-form" class="txn-form">
+          <input type="hidden" id="account-id" value="">
+          <div class="txn-form-grid">
+            <div class="field">
+              <label for="account-name">Name</label>
+              <input type="text" id="account-name" placeholder="e.g. HDFC Savings" required>
+            </div>
+            <div class="field">
+              <label for="account-type">Type</label>
+              <select id="account-type" required>
+                <option value="bank">Bank</option>
+                <option value="cash">Cash</option>
+                <option value="crypto">Crypto</option>
+                <option value="trading">Trading</option>
+                <option value="credit_card">Credit Card</option>
+                <option value="fd">Fixed Deposit</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="account-balance">Balance (₹)</label>
+              <input type="number" id="account-balance" step="0.01" required>
+            </div>
+            <div class="field">
+              <label for="account-frequency">Update Frequency</label>
+              <select id="account-frequency">
+                <option value="realtime">Realtime</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="account-include-nw">Count Toward Net Worth?</label>
+              <select id="account-include-nw">
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </div>
+          </div>
+          <div class="txn-form-actions">
+            <button type="submit" class="btn-primary" id="account-submit-btn" style="width:auto; padding:11px 28px;">Add Account</button>
+            <button type="button" class="btn-ghost" id="account-cancel-edit-btn" style="display:none;">Cancel Edit</button>
+          </div>
+          <div class="login-error" id="account-error"></div>
+        </form>
       </div>
 
       <div id="page-transactions" class="page" style="display:none;">
@@ -1169,53 +1214,6 @@
 
         <div class="section-title">Sale History (Realized P&L, Read-Only)</div>
         <div id="sales-history-list"></div>
-
-        <div class="section-title">Legacy / Manual Entries (No Cash-Flow Link — Original Module, Unchanged)</div>
-        <p style="font-size:11px; color:var(--text-dim); margin:-4px 0 14px;">
-          These predate the cash-flow engine and work exactly as before — no bank account is affected by them. New entries here won't merge with the cash-linked holdings above.
-        </p>
-        <form id="inv-form" class="txn-form">
-          <input type="hidden" id="inv-id" value="">
-          <div class="txn-form-grid">
-            <div class="field">
-              <label for="inv-name">Name</label>
-              <input type="text" id="inv-name" placeholder="e.g. Titan shares, Gold ETF" required>
-            </div>
-            <div class="field">
-              <label for="inv-category">Category</label>
-              <select id="inv-category">
-                <option>Stocks</option>
-                <option>Mutual Funds</option>
-                <option>Gold</option>
-                <option>Real Estate</option>
-                <option>Other</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="inv-cost">Cost Price (₹)</label>
-              <input type="number" id="inv-cost" min="0.01" step="0.01" required>
-            </div>
-            <div class="field">
-              <label for="inv-date">Purchase Date</label>
-              <input type="date" id="inv-date" required>
-            </div>
-            <div class="field">
-              <label for="inv-notes">Notes (optional)</label>
-              <input type="text" id="inv-notes">
-            </div>
-          </div>
-          <div class="txn-form-actions">
-            <button type="submit" class="btn-primary" id="inv-submit-btn" style="width:auto; padding:11px 28px;">Add Investment</button>
-            <button type="button" class="btn-ghost" id="inv-cancel-edit-btn" style="display:none;">Cancel Edit</button>
-          </div>
-          <div class="login-error" id="inv-error"></div>
-        </form>
-
-        <div class="section-title">Held (Legacy, Counted in Net Worth)</div>
-        <div id="inv-held-list"><div class="loading-state">Loading…</div></div>
-
-        <div class="section-title">Sold (Legacy)</div>
-        <div id="inv-sold-list"></div>
       </div>
 
       <div id="page-rewards" class="page" style="display:none;">
@@ -1455,7 +1453,6 @@
     await loadCreditCards();
     await populateEmiCardDropdown();
     await loadEmiPlans();
-    await loadInvestments();
     await populateLotAccountDropdown();
     await loadHoldings();
     await loadRewards();
@@ -1473,7 +1470,6 @@
     const { data: accounts, error } = await sb
       .from('accounts')
       .select('*')
-      .eq('include_in_net_worth', true)
       .order('created_at', { ascending: true });
 
     if (error) {
@@ -1488,7 +1484,7 @@
     }
 
     includedEl.innerHTML = accounts.map(renderCard).join('');
-    await updateSummary(accounts);
+    await updateSummary(accounts.filter(a => a.include_in_net_worth));
   }
 
   function renderCard(a) {
@@ -1512,6 +1508,10 @@
             <span>⚠ Lien-marked${a.renewal_instruction ? ' · ' + a.renewal_instruction : ''}</span>
           </div>
         ` : ''}
+        <div class="txn-row-actions" style="margin-top:10px; justify-content:flex-start;">
+          <button type="button" onclick='editAccount(${JSON.stringify(a)})'>Edit</button>
+          <button type="button" class="delete" onclick="deleteAccount('${a.id}', '${a.name.replace(/'/g, "\\'")}')">Delete</button>
+        </div>
       </div>
     `;
   }
@@ -1521,6 +1521,77 @@
   function signedAccountBalance(a) {
     return a.type === 'credit_card' ? -Number(a.balance) : Number(a.balance);
   }
+
+  // ---------- ACCOUNT CRUD ----------
+
+  const accountForm = document.getElementById('account-form');
+  const accountError = document.getElementById('account-error');
+  const accountSubmitBtn = document.getElementById('account-submit-btn');
+  const accountCancelEditBtn = document.getElementById('account-cancel-edit-btn');
+  const accountIdField = document.getElementById('account-id');
+
+  accountCancelEditBtn.addEventListener('click', () => resetAccountForm());
+
+  function resetAccountForm() {
+    accountIdField.value = '';
+    accountForm.reset();
+    document.getElementById('account-include-nw').value = 'true';
+    document.getElementById('account-frequency').value = 'realtime';
+    accountSubmitBtn.textContent = 'Add Account';
+    accountCancelEditBtn.style.display = 'none';
+    accountError.style.display = 'none';
+  }
+
+  accountForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    accountError.style.display = 'none';
+
+    const { data: { user } } = await sb.auth.getUser();
+    const payload = {
+      user_id: user.id,
+      name: document.getElementById('account-name').value,
+      type: document.getElementById('account-type').value,
+      balance: parseFloat(document.getElementById('account-balance').value),
+      update_frequency: document.getElementById('account-frequency').value,
+      include_in_net_worth: document.getElementById('account-include-nw').value === 'true'
+    };
+
+    const editId = accountIdField.value;
+    let error;
+    if (editId) {
+      ({ error } = await sb.from('accounts').update(payload).eq('id', editId));
+    } else {
+      ({ error } = await sb.from('accounts').insert(payload));
+    }
+
+    if (error) { accountError.textContent = error.message; accountError.style.display = 'block'; return; }
+
+    resetAccountForm();
+    await loadAccounts();
+    await loadAllAccountsForDropdown();
+    await loadDashboard();
+  });
+
+  window.editAccount = function (a) {
+    accountIdField.value = a.id;
+    document.getElementById('account-name').value = a.name;
+    document.getElementById('account-type').value = a.type;
+    document.getElementById('account-balance').value = a.balance;
+    document.getElementById('account-frequency').value = a.update_frequency;
+    document.getElementById('account-include-nw').value = String(a.include_in_net_worth);
+    accountSubmitBtn.textContent = 'Save Changes';
+    accountCancelEditBtn.style.display = 'inline-block';
+    window.scrollTo({ top: accountForm.offsetTop - 80, behavior: 'smooth' });
+  };
+
+  window.deleteAccount = async function (id, name) {
+    if (!confirm(`Delete "${name}"? This will also delete every transaction on this account (they're linked and cascade automatically). If this account is used as a transfer destination, EMI card, or investment funding source elsewhere, deletion may be blocked — you'll see the exact error if so.`)) return;
+    const { error } = await sb.from('accounts').delete().eq('id', id);
+    if (error) { alert('Could not delete: ' + error.message + '\n\nThis usually means the account is still referenced elsewhere (e.g. as a transfer destination, EMI credit card, or investment funding account). Remove those references first.'); return; }
+    await loadAccounts();
+    await loadAllAccountsForDropdown();
+    await loadDashboard();
+  };
 
   function updateSummary(accounts) {
     const accountsTotal = accounts.reduce((sum, a) => sum + signedAccountBalance(a), 0);
@@ -2713,130 +2784,7 @@
     await loadDashboard();
   };
 
-  // ---------- INVESTMENTS ----------
-
-  const invForm = document.getElementById('inv-form');
-  const invError = document.getElementById('inv-error');
-  const invSubmitBtn = document.getElementById('inv-submit-btn');
-  const invCancelEditBtn = document.getElementById('inv-cancel-edit-btn');
-  const invIdField = document.getElementById('inv-id');
-
-  document.getElementById('inv-date').valueAsDate = new Date();
-  invCancelEditBtn.addEventListener('click', () => resetInvForm());
-
-  function resetInvForm() {
-    invIdField.value = '';
-    invForm.reset();
-    document.getElementById('inv-date').valueAsDate = new Date();
-    invSubmitBtn.textContent = 'Add Investment';
-    invCancelEditBtn.style.display = 'none';
-    invError.style.display = 'none';
-  }
-
-  invForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    invError.style.display = 'none';
-    const { data: { user } } = await sb.auth.getUser();
-    const payload = {
-      user_id: user.id,
-      name: document.getElementById('inv-name').value,
-      category: document.getElementById('inv-category').value,
-      cost_price: parseFloat(document.getElementById('inv-cost').value),
-      purchase_date: document.getElementById('inv-date').value,
-      notes: document.getElementById('inv-notes').value || null
-    };
-    const editId = invIdField.value;
-    let error;
-    if (editId) {
-      ({ error } = await sb.from('investments').update(payload).eq('id', editId));
-    } else {
-      ({ error } = await sb.from('investments').insert(payload));
-    }
-    if (error) { invError.textContent = error.message; invError.style.display = 'block'; return; }
-    resetInvForm();
-    await loadInvestments();
-    await loadDashboard();
-  });
-
-  async function loadInvestments() {
-    const { data: invs, error } = await sb.from('investments').select('*').eq('uses_lot_tracking', false).order('purchase_date', { ascending: false });
-    const heldEl = document.getElementById('inv-held-list');
-    const soldEl = document.getElementById('inv-sold-list');
-
-    if (error) { heldEl.innerHTML = `<div class="empty-state">Error: ${error.message}</div>`; return; }
-
-    const held = (invs || []).filter(i => !i.is_sold);
-    const sold = (invs || []).filter(i => i.is_sold);
-
-    const heldTotal = held.reduce((s, i) => s + Number(i.cost_price), 0);
-    const realizedTotal = sold.reduce((s, i) => s + (Number(i.sold_price) - Number(i.cost_price)), 0);
-    document.getElementById('inv-held-total').textContent = fmtINR(heldTotal);
-    const realizedEl = document.getElementById('inv-realized-total');
-    realizedEl.textContent = (realizedTotal >= 0 ? '+' : '') + fmtINR(realizedTotal);
-    realizedEl.style.color = realizedTotal >= 0 ? 'var(--green)' : 'var(--red)';
-
-    heldEl.innerHTML = held.length ? held.map(i => `
-      <div class="txn-row" style="grid-template-columns: 1fr 120px 120px auto;">
-        <div><span class="txn-cat">${i.name}</span><span class="txn-note">${i.category} · bought ${i.purchase_date}</span></div>
-        <div class="txn-account">${fmtINR(i.cost_price)}</div>
-        <div></div>
-        <div class="txn-row-actions">
-          <button type="button" onclick='editInv(${JSON.stringify(i)})'>Edit</button>
-          <button type="button" onclick="sellInv('${i.id}')">Mark Sold</button>
-          <button type="button" class="delete" onclick="deleteInv('${i.id}')">Delete</button>
-        </div>
-      </div>
-    `).join('') : `<div class="empty-state">No investments held.</div>`;
-
-    soldEl.innerHTML = sold.length ? sold.map(i => {
-      const gain = Number(i.sold_price) - Number(i.cost_price);
-      return `
-      <div class="txn-row" style="grid-template-columns: 1fr 120px 120px auto;">
-        <div><span class="txn-cat">${i.name}</span><span class="txn-note">bought ${fmtINR(i.cost_price)} → sold ${fmtINR(i.sold_price)} on ${i.sold_date}</span></div>
-        <div class="txn-amount ${gain >= 0 ? 'income' : 'expense'}">${gain >= 0 ? '+' : ''}${fmtINR(gain)}</div>
-        <div></div>
-        <div class="txn-row-actions">
-          <button type="button" class="delete" onclick="deleteInv('${i.id}')">Delete</button>
-        </div>
-      </div>
-    `; }).join('') : `<div class="empty-state">Nothing sold yet.</div>`;
-  }
-
-  window.editInv = function (i) {
-    invIdField.value = i.id;
-    document.getElementById('inv-name').value = i.name;
-    document.getElementById('inv-category').value = i.category;
-    document.getElementById('inv-cost').value = i.cost_price;
-    document.getElementById('inv-date').value = i.purchase_date;
-    document.getElementById('inv-notes').value = i.notes || '';
-    invSubmitBtn.textContent = 'Save Changes';
-    invCancelEditBtn.style.display = 'inline-block';
-    window.scrollTo({ top: invForm.offsetTop - 80, behavior: 'smooth' });
-  };
-
-  window.sellInv = async function (id) {
-    const soldPrice = prompt('Sold price (₹)?');
-    if (soldPrice === null || soldPrice === '') return;
-    const soldDate = prompt('Sold date (YYYY-MM-DD)?', new Date().toISOString().slice(0, 10));
-    if (soldDate === null) return;
-    const { error } = await sb.from('investments').update({
-      is_sold: true, sold_price: parseFloat(soldPrice), sold_date: soldDate
-    }).eq('id', id);
-    if (error) { alert('Error: ' + error.message); return; }
-    alert('Marked sold. Remember to log the gain as a "Windfall Gains" income (or the loss as "Windfall Loss" expense) in Transactions to reflect it in your accounts.');
-    await loadInvestments();
-    await loadDashboard();
-  };
-
-  window.deleteInv = async function (id) {
-    if (!confirm('Delete this investment record permanently?')) return;
-    const { error } = await sb.from('investments').delete().eq('id', id);
-    if (error) { alert('Error: ' + error.message); return; }
-    await loadInvestments();
-    await loadDashboard();
-  };
-
-  // ---------- INVESTMENTS: CASH-LINKED LOT ENGINE (new, additive, does not touch legacy above) ----------
+  // ---------- INVESTMENTS: CASH-LINKED LOT ENGINE ----------
 
   const lotBuyForm = document.getElementById('lot-buy-form');
   const lotBuyError = document.getElementById('lot-buy-error');
@@ -2995,20 +2943,10 @@
   }
 
   async function loadInvestmentsCombinedTotals(lotHeldCost, lotRealized) {
-    const { data: { user } } = await sb.auth.getUser();
-    const { data: legacyHeld } = await sb.from('investments').select('cost_price').eq('user_id', user.id).eq('uses_lot_tracking', false).eq('is_sold', false);
-    const { data: legacySold } = await sb.from('investments').select('cost_price, sold_price').eq('user_id', user.id).eq('uses_lot_tracking', false).eq('is_sold', true);
-
-    const legacyHeldTotal = (legacyHeld || []).reduce((s, i) => s + Number(i.cost_price), 0);
-    const legacyRealizedTotal = (legacySold || []).reduce((s, i) => s + (Number(i.sold_price) - Number(i.cost_price)), 0);
-
-    const combinedHeld = legacyHeldTotal + lotHeldCost;
-    const combinedRealized = legacyRealizedTotal + lotRealized;
-
-    document.getElementById('inv-held-total').textContent = fmtINR(combinedHeld);
+    document.getElementById('inv-held-total').textContent = fmtINR(lotHeldCost);
     const realizedEl = document.getElementById('inv-realized-total');
-    realizedEl.textContent = (combinedRealized >= 0 ? '+' : '') + fmtINR(combinedRealized);
-    realizedEl.style.color = combinedRealized >= 0 ? 'var(--green)' : 'var(--red)';
+    realizedEl.textContent = (lotRealized >= 0 ? '+' : '') + fmtINR(lotRealized);
+    realizedEl.style.color = lotRealized >= 0 ? 'var(--green)' : 'var(--red)';
   }
 
   window.sellHolding = async function (investmentId, name, availableQty, avgCost) {
@@ -3534,17 +3472,14 @@
     // Net worth (reuse same logic as accounts)
     const { data: accounts } = await sb.from('accounts').select('*').eq('include_in_net_worth', true);
     const { data: loans } = await sb.from('loans').select('type, balance').eq('is_closed', false);
-    const { data: heldInvs } = await sb.from('investments').select('cost_price').eq('is_sold', false).eq('uses_lot_tracking', false);
     const { data: allLots } = await sb.from('investment_lots').select('quantity, price_per_unit');
     const { data: allSales } = await sb.from('investment_sales').select('cost_basis_removed');
     const accountsTotal = (accounts || []).reduce((s, a) => s + signedAccountBalance(a), 0);
     const debtorsTotal = (loans || []).filter(l => l.type === 'debtor').reduce((s, l) => s + Number(l.balance), 0);
     const creditorsTotal = (loans || []).filter(l => l.type === 'creditor').reduce((s, l) => s + Number(l.balance), 0);
-    const legacyInvestmentsTotal = (heldInvs || []).reduce((s, i) => s + Number(i.cost_price), 0);
     const lotBoughtTotal = (allLots || []).reduce((s, l) => s + Number(l.quantity) * Number(l.price_per_unit), 0);
     const lotSoldCostTotal = (allSales || []).reduce((s, sale) => s + Number(sale.cost_basis_removed), 0);
-    const lotTrackedRemainingTotal = lotBoughtTotal - lotSoldCostTotal;
-    const investmentsTotal = legacyInvestmentsTotal + lotTrackedRemainingTotal;
+    const investmentsTotal = lotBoughtTotal - lotSoldCostTotal;
     const netWorth = accountsTotal + debtorsTotal - creditorsTotal + investmentsTotal;
 
     document.getElementById('dash-net-worth').textContent = fmtINR(netWorth);
