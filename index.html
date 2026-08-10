@@ -1022,7 +1022,57 @@
           </div>
         </div>
 
-        <div class="section-title">Add Investment</div>
+        <div class="section-title">Buy Investment (Cash-Linked)</div>
+        <p style="font-size:11px; color:var(--text-dim); margin:-4px 0 14px;">
+          This decreases the funding account's balance and creates/adds to a holding. Buying the same name again adds a new lot to the same holding — quantity and average cost update automatically. This purchase is excluded from expense analytics.
+        </p>
+        <form id="lot-buy-form" class="txn-form">
+          <div class="txn-form-grid">
+            <div class="field">
+              <label for="lot-name">Name / Symbol</label>
+              <input type="text" id="lot-name" placeholder="e.g. RELIANCE" required>
+            </div>
+            <div class="field">
+              <label for="lot-category">Category</label>
+              <select id="lot-category">
+                <option>Stocks</option>
+                <option>Mutual Funds</option>
+                <option>Gold</option>
+                <option>Real Estate</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="lot-quantity">Quantity</label>
+              <input type="number" id="lot-quantity" min="0.000001" step="0.000001" required>
+            </div>
+            <div class="field">
+              <label for="lot-price">Price per Unit (₹)</label>
+              <input type="number" id="lot-price" min="0.0001" step="0.0001" required>
+            </div>
+            <div class="field">
+              <label for="lot-account">Funding Account (From)</label>
+              <select id="lot-account" required></select>
+            </div>
+            <div class="field">
+              <label for="lot-date">Purchase Date</label>
+              <input type="date" id="lot-date" required>
+            </div>
+          </div>
+          <button type="submit" class="btn-primary" id="lot-buy-submit-btn" style="width:auto; padding:11px 28px;">Buy</button>
+          <div class="login-error" id="lot-buy-error"></div>
+        </form>
+
+        <div class="section-title">Holdings (Cash-Linked, Lot-Tracked)</div>
+        <div id="holdings-list"><div class="loading-state">Loading…</div></div>
+
+        <div class="section-title">Sale History (Realized P&L, Read-Only)</div>
+        <div id="sales-history-list"></div>
+
+        <div class="section-title">Legacy / Manual Entries (No Cash-Flow Link — Original Module, Unchanged)</div>
+        <p style="font-size:11px; color:var(--text-dim); margin:-4px 0 14px;">
+          These predate the cash-flow engine and work exactly as before — no bank account is affected by them. New entries here won't merge with the cash-linked holdings above.
+        </p>
         <form id="inv-form" class="txn-form">
           <input type="hidden" id="inv-id" value="">
           <div class="txn-form-grid">
@@ -1060,10 +1110,10 @@
           <div class="login-error" id="inv-error"></div>
         </form>
 
-        <div class="section-title">Held (Counted in Net Worth)</div>
+        <div class="section-title">Held (Legacy, Counted in Net Worth)</div>
         <div id="inv-held-list"><div class="loading-state">Loading…</div></div>
 
-        <div class="section-title">Sold (Realized Gains/Losses)</div>
+        <div class="section-title">Sold (Legacy)</div>
         <div id="inv-sold-list"></div>
       </div>
 
@@ -1303,6 +1353,8 @@
     await loadCapitalFlow('crypto', 'crypto');
     await loadCreditCards();
     await loadInvestments();
+    await populateLotAccountDropdown();
+    await loadHoldings();
     await loadRewards();
     await loadGoals();
     await loadAnalytics();
@@ -2284,7 +2336,7 @@
   });
 
   async function loadInvestments() {
-    const { data: invs, error } = await sb.from('investments').select('*').order('purchase_date', { ascending: false });
+    const { data: invs, error } = await sb.from('investments').select('*').eq('uses_lot_tracking', false).order('purchase_date', { ascending: false });
     const heldEl = document.getElementById('inv-held-list');
     const soldEl = document.getElementById('inv-sold-list');
 
@@ -2358,6 +2410,245 @@
     const { error } = await sb.from('investments').delete().eq('id', id);
     if (error) { alert('Error: ' + error.message); return; }
     await loadInvestments();
+    await loadDashboard();
+  };
+
+  // ---------- INVESTMENTS: CASH-LINKED LOT ENGINE (new, additive, does not touch legacy above) ----------
+
+  const lotBuyForm = document.getElementById('lot-buy-form');
+  const lotBuyError = document.getElementById('lot-buy-error');
+  document.getElementById('lot-date').valueAsDate = new Date();
+
+  async function populateLotAccountDropdown() {
+    const { data: accounts } = await sb.from('accounts').select('id, name').order('created_at');
+    document.getElementById('lot-account').innerHTML = (accounts || []).map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+  }
+
+  lotBuyForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    lotBuyError.style.display = 'none';
+
+    const { data: { user } } = await sb.auth.getUser();
+    const name = document.getElementById('lot-name').value.trim();
+    const category = document.getElementById('lot-category').value;
+    const quantity = parseFloat(document.getElementById('lot-quantity').value);
+    const pricePerUnit = parseFloat(document.getElementById('lot-price').value);
+    const accountId = document.getElementById('lot-account').value;
+    const purchaseDate = document.getElementById('lot-date').value;
+    const totalAmount = quantity * pricePerUnit;
+
+    // Step 1: find or create the holding (case-insensitive match, only among lot-tracked holdings)
+    let { data: existing } = await sb
+      .from('investments')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('uses_lot_tracking', true)
+      .ilike('name', name)
+      .maybeSingle();
+
+    let investmentId;
+    if (existing) {
+      investmentId = existing.id;
+    } else {
+      const { data: newHolding, error: holdingError } = await sb
+        .from('investments')
+        .insert({ user_id: user.id, name, category, cost_price: 0, purchase_date: purchaseDate, uses_lot_tracking: true })
+        .select('id')
+        .single();
+      if (holdingError) { lotBuyError.textContent = holdingError.message; lotBuyError.style.display = 'block'; return; }
+      investmentId = newHolding.id;
+    }
+
+    // Step 2: create the investment_buy transaction (decreases bank balance, excluded from expense analytics)
+    const { data: txn, error: txnError } = await sb
+      .from('transactions')
+      .insert({
+        user_id: user.id, account_id: accountId, type: 'investment_buy',
+        category: 'Investment Purchase', amount: totalAmount, txn_date: purchaseDate,
+        investment_id: investmentId, note: `Buy ${quantity} ${name} @ ${fmtINR(pricePerUnit)}`
+      })
+      .select('id')
+      .single();
+    if (txnError) { lotBuyError.textContent = txnError.message; lotBuyError.style.display = 'block'; return; }
+
+    // Step 3: create the lot record, linked to that transaction
+    const { error: lotError } = await sb.from('investment_lots').insert({
+      investment_id: investmentId, user_id: user.id, quantity, price_per_unit: pricePerUnit,
+      purchase_date: purchaseDate, account_id: accountId, transaction_id: txn.id
+    });
+    if (lotError) { lotBuyError.textContent = lotError.message; lotBuyError.style.display = 'block'; return; }
+
+    lotBuyForm.reset();
+    document.getElementById('lot-date').valueAsDate = new Date();
+    await loadHoldings();
+    await loadAccounts();
+    await loadTransactions();
+    await loadDashboard();
+  });
+
+  async function computeHoldingPosition(investmentId) {
+    const { data: lots } = await sb.from('investment_lots').select('*').eq('investment_id', investmentId);
+    const { data: sales } = await sb.from('investment_sales').select('*').eq('investment_id', investmentId).order('sale_date');
+
+    const totalBoughtQty = (lots || []).reduce((s, l) => s + Number(l.quantity), 0);
+    const totalBoughtCost = (lots || []).reduce((s, l) => s + Number(l.quantity) * Number(l.price_per_unit), 0);
+    const totalSoldQty = (sales || []).reduce((s, sale) => s + Number(sale.quantity_sold), 0);
+    const totalCostRemoved = (sales || []).reduce((s, sale) => s + Number(sale.cost_basis_removed), 0);
+
+    const remainingQty = totalBoughtQty - totalSoldQty;
+    const remainingCost = totalBoughtCost - totalCostRemoved;
+    const avgCost = remainingQty > 0.0000001 ? remainingCost / remainingQty : 0;
+    const realizedPL = (sales || []).reduce((s, sale) => s + Number(sale.realized_pl), 0);
+
+    return { lots: lots || [], sales: sales || [], totalBoughtQty, totalBoughtCost, remainingQty, remainingCost, avgCost, realizedPL };
+  }
+
+  async function loadHoldings() {
+    const { data: { user } } = await sb.auth.getUser();
+    const { data: holdings, error } = await sb
+      .from('investments').select('*').eq('user_id', user.id).eq('uses_lot_tracking', true).order('created_at', { ascending: false });
+
+    const listEl = document.getElementById('holdings-list');
+    const salesEl = document.getElementById('sales-history-list');
+    if (error) { listEl.innerHTML = `<div class="empty-state">Error: ${error.message}</div>`; return; }
+
+    if (!holdings || holdings.length === 0) {
+      listEl.innerHTML = `<div class="empty-state">No cash-linked holdings yet.</div>`;
+      salesEl.innerHTML = '';
+      return;
+    }
+
+    const rows = [];
+    const allSaleRows = [];
+    let totalHeldCost = 0, totalRealized = 0;
+
+    for (const h of holdings) {
+      const pos = await computeHoldingPosition(h.id);
+      totalHeldCost += pos.remainingCost;
+      totalRealized += pos.realizedPL;
+
+      if (pos.remainingQty > 0.0000001) {
+        rows.push(`
+          <div class="txn-row" style="grid-template-columns: 1fr 100px 120px 120px auto;">
+            <div><span class="txn-cat">${h.name}</span><span class="txn-note">${h.category}</span></div>
+            <div class="txn-account">${pos.remainingQty}</div>
+            <div class="txn-account">avg ${fmtINR(pos.avgCost)}</div>
+            <div class="txn-account">${fmtINR(pos.remainingCost)}</div>
+            <div class="txn-row-actions">
+              <button type="button" onclick="sellHolding('${h.id}', '${h.name.replace(/'/g, "\\'")}', ${pos.remainingQty}, ${pos.avgCost})">Sell</button>
+            </div>
+          </div>
+        `);
+      } else if (pos.totalBoughtQty > 0) {
+        rows.push(`
+          <div class="txn-row" style="grid-template-columns: 1fr 100px 120px 120px auto;">
+            <div><span class="txn-cat">${h.name}</span><span class="txn-note">fully sold</span></div>
+            <div class="txn-account">0</div><div class="txn-account">—</div><div class="txn-account">₹0</div>
+            <div></div>
+          </div>
+        `);
+      }
+
+      pos.sales.forEach(s => {
+        allSaleRows.push({ ...s, name: h.name });
+      });
+    }
+
+    listEl.innerHTML = rows.length ? rows.join('') : `<div class="empty-state">All holdings fully sold.</div>`;
+
+    allSaleRows.sort((a, b) => b.sale_date.localeCompare(a.sale_date));
+    salesEl.innerHTML = allSaleRows.length ? allSaleRows.map(s => `
+      <div class="txn-row" style="grid-template-columns: 100px 1fr 120px auto;">
+        <div class="txn-date">${s.sale_date}</div>
+        <div><span class="txn-cat">${s.name}</span><span class="txn-note">sold ${s.quantity_sold} for ${fmtINR(s.sale_proceeds)}, cost basis removed ${fmtINR(s.cost_basis_removed)}</span></div>
+        <div class="txn-amount ${s.realized_pl >= 0 ? 'income' : 'expense'}">${s.realized_pl >= 0 ? '+' : ''}${fmtINR(s.realized_pl)}</div>
+        <div class="txn-row-actions">
+          <button type="button" class="delete" onclick="deleteSale('${s.id}', '${s.transaction_id || ''}')">Delete</button>
+        </div>
+      </div>
+    `).join('') : `<div class="empty-state">No sales yet.</div>`;
+
+    await loadInvestmentsCombinedTotals(totalHeldCost, totalRealized);
+  }
+
+  async function loadInvestmentsCombinedTotals(lotHeldCost, lotRealized) {
+    const { data: { user } } = await sb.auth.getUser();
+    const { data: legacyHeld } = await sb.from('investments').select('cost_price').eq('user_id', user.id).eq('uses_lot_tracking', false).eq('is_sold', false);
+    const { data: legacySold } = await sb.from('investments').select('cost_price, sold_price').eq('user_id', user.id).eq('uses_lot_tracking', false).eq('is_sold', true);
+
+    const legacyHeldTotal = (legacyHeld || []).reduce((s, i) => s + Number(i.cost_price), 0);
+    const legacyRealizedTotal = (legacySold || []).reduce((s, i) => s + (Number(i.sold_price) - Number(i.cost_price)), 0);
+
+    const combinedHeld = legacyHeldTotal + lotHeldCost;
+    const combinedRealized = legacyRealizedTotal + lotRealized;
+
+    document.getElementById('inv-held-total').textContent = fmtINR(combinedHeld);
+    const realizedEl = document.getElementById('inv-realized-total');
+    realizedEl.textContent = (combinedRealized >= 0 ? '+' : '') + fmtINR(combinedRealized);
+    realizedEl.style.color = combinedRealized >= 0 ? 'var(--green)' : 'var(--red)';
+  }
+
+  window.sellHolding = async function (investmentId, name, availableQty, avgCost) {
+    const qtyStr = prompt(`Sell how much of ${name}? (Available: ${availableQty})`);
+    if (qtyStr === null || qtyStr === '') return;
+    const qty = parseFloat(qtyStr);
+    if (isNaN(qty) || qty <= 0 || qty > availableQty + 0.0000001) { alert('Invalid quantity.'); return; }
+
+    const proceedsStr = prompt('Total sale proceeds received (₹)?');
+    if (proceedsStr === null || proceedsStr === '') return;
+    const proceeds = parseFloat(proceedsStr);
+    if (isNaN(proceeds) || proceeds < 0) { alert('Invalid amount.'); return; }
+
+    const { data: accounts } = await sb.from('accounts').select('id, name').order('created_at');
+    const accountNames = (accounts || []).map((a, i) => `${i + 1}. ${a.name}`).join('\n');
+    const accIdxStr = prompt(`Receiving account:\n${accountNames}\nEnter number:`);
+    if (accIdxStr === null) return;
+    const accIdx = parseInt(accIdxStr, 10) - 1;
+    if (!accounts || accIdx < 0 || accIdx >= accounts.length) { alert('Invalid account selection.'); return; }
+    const receivingAccountId = accounts[accIdx].id;
+
+    const saleDate = prompt('Sale date (YYYY-MM-DD)?', new Date().toISOString().slice(0, 10));
+    if (saleDate === null) return;
+
+    const costBasisRemoved = avgCost * qty;
+    const realizedPL = proceeds - costBasisRemoved;
+    const { data: { user } } = await sb.auth.getUser();
+
+    const { data: txn, error: txnError } = await sb
+      .from('transactions')
+      .insert({
+        user_id: user.id, account_id: receivingAccountId, type: 'investment_sell',
+        category: 'Investment Sale', amount: proceeds, txn_date: saleDate,
+        investment_id: investmentId, note: `Sell ${qty} ${name}`
+      })
+      .select('id')
+      .single();
+    if (txnError) { alert('Error: ' + txnError.message); return; }
+
+    const { error: saleError } = await sb.from('investment_sales').insert({
+      investment_id: investmentId, user_id: user.id, quantity_sold: qty, sale_proceeds: proceeds,
+      cost_basis_removed: costBasisRemoved, realized_pl: realizedPL, sale_date: saleDate,
+      receiving_account_id: receivingAccountId, transaction_id: txn.id
+    });
+    if (saleError) { alert('Error: ' + saleError.message); return; }
+
+    alert(`Sale recorded. Realized ${realizedPL >= 0 ? 'gain' : 'loss'}: ${fmtINR(realizedPL)}. This is shown as performance only — the ${fmtINR(proceeds)} proceeds already went to your account without being double-counted as income.`);
+    await loadHoldings();
+    await loadAccounts();
+    await loadTransactions();
+    await loadDashboard();
+  };
+
+  window.deleteSale = async function (saleId, transactionId) {
+    if (!confirm('Delete this sale record? If a linked transaction exists, it will also be removed and your account balance reversed.')) return;
+    const { error: saleError } = await sb.from('investment_sales').delete().eq('id', saleId);
+    if (saleError) { alert('Error: ' + saleError.message); return; }
+    if (transactionId) {
+      await sb.from('transactions').delete().eq('id', transactionId);
+    }
+    await loadHoldings();
+    await loadAccounts();
+    await loadTransactions();
     await loadDashboard();
   };
 
@@ -2820,11 +3111,17 @@
     // Net worth (reuse same logic as accounts)
     const { data: accounts } = await sb.from('accounts').select('*').eq('include_in_net_worth', true);
     const { data: loans } = await sb.from('loans').select('type, balance').eq('is_closed', false);
-    const { data: heldInvs } = await sb.from('investments').select('cost_price').eq('is_sold', false);
+    const { data: heldInvs } = await sb.from('investments').select('cost_price').eq('is_sold', false).eq('uses_lot_tracking', false);
+    const { data: allLots } = await sb.from('investment_lots').select('quantity, price_per_unit');
+    const { data: allSales } = await sb.from('investment_sales').select('cost_basis_removed');
     const accountsTotal = (accounts || []).reduce((s, a) => s + Number(a.balance), 0);
     const debtorsTotal = (loans || []).filter(l => l.type === 'debtor').reduce((s, l) => s + Number(l.balance), 0);
     const creditorsTotal = (loans || []).filter(l => l.type === 'creditor').reduce((s, l) => s + Number(l.balance), 0);
-    const investmentsTotal = (heldInvs || []).reduce((s, i) => s + Number(i.cost_price), 0);
+    const legacyInvestmentsTotal = (heldInvs || []).reduce((s, i) => s + Number(i.cost_price), 0);
+    const lotBoughtTotal = (allLots || []).reduce((s, l) => s + Number(l.quantity) * Number(l.price_per_unit), 0);
+    const lotSoldCostTotal = (allSales || []).reduce((s, sale) => s + Number(sale.cost_basis_removed), 0);
+    const lotTrackedRemainingTotal = lotBoughtTotal - lotSoldCostTotal;
+    const investmentsTotal = legacyInvestmentsTotal + lotTrackedRemainingTotal;
     const netWorth = accountsTotal + debtorsTotal - creditorsTotal + investmentsTotal;
 
     document.getElementById('dash-net-worth').textContent = fmtINR(netWorth);
@@ -2891,20 +3188,23 @@
     recentEl.innerHTML = (recentTxns && recentTxns.length)
       ? recentTxns.map(t => {
           const isTransfer = t.type === 'transfer';
-          const amountClass = isTransfer ? '' : t.type;
-          const amountPrefix = isTransfer ? '' : (t.type === 'income' ? '+' : '−');
+          const isInvestment = t.type === 'investment_buy' || t.type === 'investment_sell';
+          const isNeutral = isTransfer || isInvestment;
+          const amountClass = isNeutral ? '' : t.type;
+          const amountPrefix = isNeutral ? '' : (t.type === 'income' ? '+' : '−');
           const accountLabel = isTransfer
             ? `${t.accounts?.name || '—'} → ${t.to_account?.name || '—'}`
             : (t.accounts?.name || '—');
+          const catLabel = isTransfer ? 'Transfer' : (t.category || '');
           return `
           <div class="txn-row">
             <div class="txn-date">${t.txn_date}</div>
             <div>
-              <span class="txn-cat">${isTransfer ? 'Transfer' : t.category}</span>
+              <span class="txn-cat">${catLabel}</span>
               ${t.note ? `<span class="txn-note">${t.note}</span>` : ''}
             </div>
             <div class="txn-account">${accountLabel}</div>
-            <div class="txn-amount ${amountClass}" style="${isTransfer ? 'color:var(--text-dim);' : ''}">${amountPrefix}${fmtINR(t.amount)}</div>
+            <div class="txn-amount ${amountClass}" style="${isNeutral ? 'color:var(--text-dim);' : ''}">${amountPrefix}${fmtINR(t.amount)}</div>
             <div></div>
           </div>
         `;
@@ -3065,22 +3365,25 @@
 
     listEl.innerHTML = txns.map(t => {
       const isTransfer = t.type === 'transfer';
-      const amountClass = isTransfer ? '' : t.type;
-      const amountPrefix = isTransfer ? '' : (t.type === 'income' ? '+' : '−');
+      const isInvestment = t.type === 'investment_buy' || t.type === 'investment_sell';
+      const isNeutral = isTransfer || isInvestment;
+      const amountClass = isNeutral ? '' : t.type;
+      const amountPrefix = isNeutral ? '' : (t.type === 'income' ? '+' : '−');
       const accountLabel = isTransfer
         ? `${t.accounts?.name || '—'} → ${t.to_account?.name || '—'}`
         : (t.accounts?.name || '—');
+      const catLabel = isTransfer ? 'Transfer' : (t.category || '');
       return `
       <div class="txn-row">
         <div class="txn-date">${t.txn_date}</div>
         <div>
-          <span class="txn-cat">${isTransfer ? 'Transfer' : t.category}</span>
+          <span class="txn-cat">${catLabel}${isInvestment ? ' <span style="font-size:9px; color:var(--text-dim);">(manage in Investments)</span>' : ''}</span>
           ${t.note ? `<span class="txn-note">${t.note}</span>` : ''}
         </div>
         <div class="txn-account">${accountLabel}</div>
-        <div class="txn-amount ${amountClass}" style="${isTransfer ? 'color:var(--text-dim);' : ''}">${amountPrefix}${fmtINR(t.amount)}</div>
+        <div class="txn-amount ${amountClass}" style="${isNeutral ? 'color:var(--text-dim);' : ''}">${amountPrefix}${fmtINR(t.amount)}</div>
         <div class="txn-row-actions">
-          <button type="button" onclick='editTxn(${JSON.stringify(t)})'>Edit</button>
+          ${isInvestment ? '' : `<button type="button" onclick='editTxn(${JSON.stringify(t)})'>Edit</button>`}
           <button type="button" class="delete" onclick="deleteTxn('${t.id}')">Delete</button>
         </div>
       </div>
@@ -3106,13 +3409,26 @@
   };
 
   window.deleteTxn = async function (id) {
-    if (!confirm('Delete this transaction? The linked account balance will be reversed automatically.')) return;
+    const { data: txnRow } = await sb.from('transactions').select('type').eq('id', id).single();
+
+    if (txnRow && txnRow.type === 'investment_buy') {
+      if (!confirm('Delete this purchase? This will also remove the linked holding lot and reverse the bank balance.')) return;
+      await sb.from('investment_lots').delete().eq('transaction_id', id);
+    } else if (txnRow && txnRow.type === 'investment_sell') {
+      if (!confirm('Delete this sale? This will also remove the linked sale record and reverse the bank balance.')) return;
+      await sb.from('investment_sales').delete().eq('transaction_id', id);
+    } else {
+      if (!confirm('Delete this transaction? The linked account balance will be reversed automatically.')) return;
+    }
+
     const { error } = await sb.from('transactions').delete().eq('id', id);
     if (error) { alert('Error: ' + error.message); return; }
     await loadAccounts();
     await loadTransactions();
     await loadCapitalFlow('trading', 'trade');
     await loadCapitalFlow('crypto', 'crypto');
+    await loadHoldings();
+    await loadDashboard();
   };
 
   async function loadAllAccountsForDropdown() {
