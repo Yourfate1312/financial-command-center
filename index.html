@@ -1399,12 +1399,28 @@
         <div class="meta">
           <span>${a.update_frequency}</span>
         </div>
+        ${a.type === 'fd' && a.maturity_date ? `
+          <div class="meta" style="margin-top:6px;">
+            <span>Matures ${a.maturity_date} → ${fmtINR(a.maturity_amount)}</span>
+          </div>
+        ` : ''}
+        ${a.lien_marked ? `
+          <div class="meta" style="margin-top:4px; color:var(--amber);">
+            <span>⚠ Lien-marked${a.renewal_instruction ? ' · ' + a.renewal_instruction : ''}</span>
+          </div>
+        ` : ''}
       </div>
     `;
   }
 
+  // Credit cards store balance as a positive "amount owed" — for any net worth
+  // sum, that must subtract, not add. Every account type sums normally.
+  function signedAccountBalance(a) {
+    return a.type === 'credit_card' ? -Number(a.balance) : Number(a.balance);
+  }
+
   function updateSummary(accounts) {
-    const accountsTotal = accounts.reduce((sum, a) => sum + Number(a.balance), 0);
+    const accountsTotal = accounts.reduce((sum, a) => sum + signedAccountBalance(a), 0);
     document.getElementById('net-worth-value').textContent = fmtINR(accountsTotal);
     document.getElementById('included-count-value').textContent = accounts.length;
   }
@@ -3114,7 +3130,7 @@
     const { data: heldInvs } = await sb.from('investments').select('cost_price').eq('is_sold', false).eq('uses_lot_tracking', false);
     const { data: allLots } = await sb.from('investment_lots').select('quantity, price_per_unit');
     const { data: allSales } = await sb.from('investment_sales').select('cost_basis_removed');
-    const accountsTotal = (accounts || []).reduce((s, a) => s + Number(a.balance), 0);
+    const accountsTotal = (accounts || []).reduce((s, a) => s + signedAccountBalance(a), 0);
     const debtorsTotal = (loans || []).filter(l => l.type === 'debtor').reduce((s, l) => s + Number(l.balance), 0);
     const creditorsTotal = (loans || []).filter(l => l.type === 'creditor').reduce((s, l) => s + Number(l.balance), 0);
     const legacyInvestmentsTotal = (heldInvs || []).reduce((s, i) => s + Number(i.cost_price), 0);
