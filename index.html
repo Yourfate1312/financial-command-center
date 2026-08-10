@@ -1484,7 +1484,7 @@
     }
 
     includedEl.innerHTML = accounts.map(renderCard).join('');
-    await updateSummary(accounts.filter(a => a.include_in_net_worth));
+    await updateSummary(accounts.filter(a => a.type === 'bank' || a.type === 'cash'));
   }
 
   function renderCard(a) {
