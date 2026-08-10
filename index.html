@@ -457,6 +457,7 @@
       <div class="nav-item" data-page="trading">Trading</div>
       <div class="nav-item" data-page="crypto">Crypto</div>
       <div class="nav-item" data-page="creditcards">Credit Cards</div>
+      <div class="nav-item" data-page="emi">EMI</div>
       <div class="nav-item" data-page="investments">Investments</div>
       <div class="nav-item" data-page="rewards">Rewards</div>
       <div class="nav-item" data-page="goals">Goals</div>
@@ -1008,6 +1009,106 @@
         </form>
       </div>
 
+      <div id="page-emi" class="page" style="display:none;">
+        <div class="summary-row">
+          <div class="summary-cell">
+            <div class="label">Active EMIs</div>
+            <div class="value amber" id="emi-active-count">—</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Monthly EMI Obligation</div>
+            <div class="value" id="emi-monthly-obligation">—</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Next EMI Due</div>
+            <div class="value" id="emi-next-due" style="font-size:16px;">—</div>
+          </div>
+        </div>
+        <div class="summary-row">
+          <div class="summary-cell">
+            <div class="label">Principal Outstanding</div>
+            <div class="value" id="emi-principal-outstanding">—</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Interest Outstanding</div>
+            <div class="value" id="emi-interest-outstanding" style="color:var(--red);">—</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">GST Outstanding</div>
+            <div class="value" id="emi-gst-outstanding" style="color:var(--red);">—</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Total EMI Outstanding</div>
+            <div class="value amber" id="emi-total-outstanding">—</div>
+          </div>
+        </div>
+
+        <div class="section-title">Upcoming Obligations by Month</div>
+        <div id="emi-upcoming-chart"></div>
+
+        <div class="section-title">Create EMI Plan (Converts a Credit Card Purchase)</div>
+        <p style="font-size:11px; color:var(--text-dim); margin:-4px 0 14px;">
+          This reduces the card's revolving balance by the converted amount and generates a full repayment schedule. Only interest + GST per installment ever hits expense analytics — principal repayment is visible in transaction history but excluded from it.
+        </p>
+        <form id="emi-plan-form" class="txn-form">
+          <div class="txn-form-grid">
+            <div class="field">
+              <label for="emi-description">Description</label>
+              <input type="text" id="emi-description" placeholder="e.g. Laptop purchase" required>
+            </div>
+            <div class="field">
+              <label for="emi-merchant">Merchant</label>
+              <input type="text" id="emi-merchant" placeholder="e.g. Croma">
+            </div>
+            <div class="field">
+              <label for="emi-card">Credit Card</label>
+              <select id="emi-card" required></select>
+            </div>
+            <div class="field">
+              <label for="emi-original-amount">Original Transaction Amount (₹)</label>
+              <input type="number" id="emi-original-amount" min="0.01" step="0.01" required>
+            </div>
+            <div class="field">
+              <label for="emi-conversion-date">Conversion Date</label>
+              <input type="date" id="emi-conversion-date" required>
+            </div>
+            <div class="field">
+              <label for="emi-tenure">Tenure (months)</label>
+              <input type="number" id="emi-tenure" min="1" step="1" required>
+            </div>
+            <div class="field">
+              <label for="emi-interest-rate">Interest Rate (annual %)</label>
+              <input type="number" id="emi-interest-rate" min="0" step="0.01" required>
+            </div>
+            <div class="field">
+              <label for="emi-monthly-emi">Monthly EMI (₹)</label>
+              <input type="number" id="emi-monthly-emi" min="0.01" step="0.01" required>
+            </div>
+            <div class="field">
+              <label for="emi-processing-fee">Processing Fee (₹)</label>
+              <input type="number" id="emi-processing-fee" min="0" step="0.01" value="0">
+            </div>
+            <div class="field">
+              <label for="emi-gst-rate">GST Rate (%)</label>
+              <input type="number" id="emi-gst-rate" min="0" step="0.01" value="18">
+            </div>
+            <div class="field">
+              <label for="emi-first-date">First EMI Date</label>
+              <input type="date" id="emi-first-date" required>
+            </div>
+            <div class="field">
+              <label for="emi-notes">Notes (optional)</label>
+              <input type="text" id="emi-notes">
+            </div>
+          </div>
+          <button type="submit" class="btn-primary" id="emi-plan-submit-btn" style="width:auto; padding:11px 28px;">Create EMI Plan</button>
+          <div class="login-error" id="emi-plan-error"></div>
+        </form>
+
+        <div class="section-title">Your EMI Plans</div>
+        <div id="emi-plans-list"><div class="loading-state">Loading…</div></div>
+      </div>
+
       <div id="page-investments" class="page" style="display:none;">
         <div class="summary-row">
           <div class="summary-cell">
@@ -1352,6 +1453,8 @@
     await loadCapitalFlow('trading', 'trade');
     await loadCapitalFlow('crypto', 'crypto');
     await loadCreditCards();
+    await populateEmiCardDropdown();
+    await loadEmiPlans();
     await loadInvestments();
     await populateLotAccountDropdown();
     await loadHoldings();
@@ -2306,6 +2409,310 @@
     await loadAccounts();
   });
 
+  // ---------- EMI ENGINE ----------
+
+  async function populateEmiCardDropdown() {
+    const { data: cards } = await sb.from('accounts').select('id, name').eq('type', 'credit_card');
+    document.getElementById('emi-card').innerHTML = (cards || []).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  }
+
+  document.getElementById('emi-conversion-date').valueAsDate = new Date();
+  document.getElementById('emi-first-date').valueAsDate = new Date();
+
+  // Standard reducing-balance amortization. Last installment is corrected to exactly
+  // zero out closing_principal (avoids rounding drift over many months).
+  function generateEmiSchedule(openingPrincipal, monthlyEmi, annualRatePct, tenureMonths, gstRatePct, firstEmiDate) {
+    const monthlyRate = annualRatePct / 12 / 100;
+    const schedule = [];
+    let opening = openingPrincipal;
+    const firstDate = new Date(firstEmiDate);
+
+    for (let i = 1; i <= tenureMonths; i++) {
+      const interest = opening * monthlyRate;
+      let principal = monthlyEmi - interest;
+      let emiAmount = monthlyEmi;
+      if (i === tenureMonths || principal >= opening) {
+        principal = opening;
+        emiAmount = principal + interest;
+      }
+      const gst = interest * (gstRatePct / 100);
+      const closing = Math.max(0, opening - principal);
+
+      const dueDate = new Date(firstDate.getFullYear(), firstDate.getMonth() + (i - 1), firstDate.getDate());
+
+      schedule.push({
+        installment_number: i,
+        due_date: dueDate.toISOString().slice(0, 10),
+        opening_principal: Number(opening.toFixed(2)),
+        emi_amount: Number(emiAmount.toFixed(2)),
+        principal_component: Number(principal.toFixed(2)),
+        interest_component: Number(interest.toFixed(2)),
+        gst_component: Number(gst.toFixed(2)),
+        closing_principal: Number(closing.toFixed(2)),
+        payment_status: 'pending'
+      });
+
+      opening = closing;
+      if (opening <= 0.005) break;
+    }
+    return schedule;
+  }
+
+  const emiPlanForm = document.getElementById('emi-plan-form');
+  const emiPlanError = document.getElementById('emi-plan-error');
+
+  emiPlanForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    emiPlanError.style.display = 'none';
+
+    const { data: { user } } = await sb.auth.getUser();
+    const cardId = document.getElementById('emi-card').value;
+    const description = document.getElementById('emi-description').value;
+    const merchant = document.getElementById('emi-merchant').value || null;
+    const originalAmount = parseFloat(document.getElementById('emi-original-amount').value);
+    const conversionDate = document.getElementById('emi-conversion-date').value;
+    const tenure = parseInt(document.getElementById('emi-tenure').value, 10);
+    const interestRate = parseFloat(document.getElementById('emi-interest-rate').value);
+    const monthlyEmi = parseFloat(document.getElementById('emi-monthly-emi').value);
+    const processingFee = parseFloat(document.getElementById('emi-processing-fee').value) || 0;
+    const gstRate = parseFloat(document.getElementById('emi-gst-rate').value) || 0;
+    const firstEmiDate = document.getElementById('emi-first-date').value;
+    const notes = document.getElementById('emi-notes').value || null;
+
+    // Step 1: create the plan
+    const { data: plan, error: planError } = await sb.from('emi_plans').insert({
+      user_id: user.id, description, merchant, credit_card_account_id: cardId,
+      original_amount: originalAmount, conversion_date: conversionDate, tenure_months: tenure,
+      interest_rate: interestRate, monthly_emi: monthlyEmi, processing_fee: processingFee,
+      gst_rate: gstRate, first_emi_date: firstEmiDate, notes
+    }).select('id').single();
+    if (planError) { emiPlanError.textContent = planError.message; emiPlanError.style.display = 'block'; return; }
+
+    // Step 2: emi_conversion transaction - reduces card's revolving balance by the converted principal
+    const { data: convTxn, error: convError } = await sb.from('transactions').insert({
+      user_id: user.id, account_id: cardId, type: 'emi_conversion', category: 'EMI Conversion',
+      amount: originalAmount, txn_date: conversionDate, note: `EMI conversion: ${description}`
+    }).select('id').single();
+    if (convError) { emiPlanError.textContent = convError.message; emiPlanError.style.display = 'block'; return; }
+
+    // Step 3: processing fee (if any) - a real one-time expense against the card
+    let feeTxnId = null;
+    if (processingFee > 0) {
+      const feeGst = processingFee * (gstRate / 100);
+      const { data: feeTxn, error: feeError } = await sb.from('transactions').insert({
+        user_id: user.id, account_id: cardId, type: 'expense', category: 'EMI Processing Fee',
+        amount: processingFee + feeGst, txn_date: conversionDate, note: `Processing fee: ${description}`
+      }).select('id').single();
+      if (feeError) { emiPlanError.textContent = feeError.message; emiPlanError.style.display = 'block'; return; }
+      feeTxnId = feeTxn.id;
+    }
+
+    // Step 4: link both transactions back to the plan
+    await sb.from('emi_plans').update({ conversion_transaction_id: convTxn.id, processing_fee_transaction_id: feeTxnId }).eq('id', plan.id);
+
+    // Step 5: generate and insert the full schedule
+    const schedule = generateEmiSchedule(originalAmount, monthlyEmi, interestRate, tenure, gstRate, firstEmiDate);
+    const scheduleRows = schedule.map(s => ({ ...s, emi_plan_id: plan.id }));
+    const { error: scheduleError } = await sb.from('emi_schedule').insert(scheduleRows);
+    if (scheduleError) { emiPlanError.textContent = scheduleError.message; emiPlanError.style.display = 'block'; return; }
+
+    emiPlanForm.reset();
+    document.getElementById('emi-conversion-date').valueAsDate = new Date();
+    document.getElementById('emi-first-date').valueAsDate = new Date();
+    document.getElementById('emi-gst-rate').value = 18;
+    document.getElementById('emi-processing-fee').value = 0;
+    await loadEmiPlans();
+    await loadAccounts();
+    await loadCreditCards();
+    await loadDashboard();
+  });
+
+  async function loadEmiPlans() {
+    const { data: { user } } = await sb.auth.getUser();
+    const { data: plans, error } = await sb.from('emi_plans').select('*, accounts(name)').eq('user_id', user.id).order('created_at', { ascending: false });
+    const listEl = document.getElementById('emi-plans-list');
+    if (error) { listEl.innerHTML = `<div class="empty-state">Error: ${error.message}</div>`; return; }
+
+    if (!plans || plans.length === 0) {
+      listEl.innerHTML = `<div class="empty-state">No EMI plans yet.</div>`;
+      ['emi-active-count','emi-monthly-obligation','emi-next-due','emi-principal-outstanding','emi-interest-outstanding','emi-gst-outstanding','emi-total-outstanding'].forEach(id => {
+        document.getElementById(id).textContent = id === 'emi-active-count' ? '0' : (id === 'emi-next-due' ? '—' : fmtINR(0));
+      });
+      document.getElementById('emi-upcoming-chart').innerHTML = `<div class="empty-state">Nothing scheduled.</div>`;
+      return;
+    }
+
+    let activeCount = 0, monthlyObligation = 0, principalOut = 0, interestOut = 0, gstOut = 0;
+    let nextDue = null;
+    const upcomingByMonth = {};
+    const planCards = [];
+
+    for (const plan of plans) {
+      const { data: schedule } = await sb.from('emi_schedule').select('*').eq('emi_plan_id', plan.id).order('installment_number');
+      const pending = (schedule || []).filter(s => s.payment_status === 'pending');
+      const paid = (schedule || []).filter(s => s.payment_status === 'paid');
+
+      const planPrincipalOut = pending.reduce((s, r) => s + Number(r.principal_component), 0);
+      const planInterestOut = pending.reduce((s, r) => s + Number(r.interest_component), 0);
+      const planGstOut = pending.reduce((s, r) => s + Number(r.gst_component), 0);
+      const planTotalOut = planPrincipalOut + planInterestOut + planGstOut;
+
+      if (plan.status === 'active' && pending.length > 0) {
+        activeCount++;
+        monthlyObligation += Number(plan.monthly_emi);
+        principalOut += planPrincipalOut;
+        interestOut += planInterestOut;
+        gstOut += planGstOut;
+
+        const planNextDue = pending[0]?.due_date;
+        if (planNextDue && (!nextDue || planNextDue < nextDue)) nextDue = planNextDue;
+
+        pending.forEach(r => {
+          const monthKey = r.due_date.slice(0, 7);
+          upcomingByMonth[monthKey] = (upcomingByMonth[monthKey] || 0) + Number(r.emi_amount);
+        });
+      }
+
+      const nextInstallment = pending[0];
+      planCards.push(`
+        <div class="account-card" style="margin-bottom:12px;">
+          <div class="type-badge">${plan.status} · ${plan.accounts?.name || 'card'}</div>
+          <div class="name">${plan.description}${plan.merchant ? ' — ' + plan.merchant : ''}</div>
+          <div class="meta" style="margin-top:8px; flex-direction:column; align-items:flex-start; gap:4px;">
+            <span>Paid: ${paid.length}/${schedule.length} &nbsp; Monthly EMI: ${fmtINR(plan.monthly_emi)}</span>
+            <span>Principal Out: ${fmtINR(planPrincipalOut)} &nbsp; Interest Out: ${fmtINR(planInterestOut)} &nbsp; GST Out: ${fmtINR(planGstOut)}</span>
+            <span>Total Outstanding: ${fmtINR(planTotalOut)} ${nextInstallment ? '&nbsp; Next Due: ' + nextInstallment.due_date : ''}</span>
+          </div>
+          <div class="txn-row-actions" style="margin-top:10px; justify-content:flex-start;">
+            <button type="button" onclick="toggleEmiSchedule('${plan.id}')">View Schedule</button>
+            ${nextInstallment ? `<button type="button" onclick="recordEmiPayment('${nextInstallment.id}', '${plan.id}')">Record Next Payment</button>` : ''}
+            <button type="button" class="delete" onclick="deleteEmiPlan('${plan.id}')">Delete Plan</button>
+          </div>
+          <div id="emi-schedule-${plan.id}" style="display:none; margin-top:12px;"></div>
+        </div>
+      `);
+    }
+
+    const totalOut = principalOut + interestOut + gstOut;
+    document.getElementById('emi-active-count').textContent = activeCount;
+    document.getElementById('emi-monthly-obligation').textContent = fmtINR(monthlyObligation);
+    document.getElementById('emi-next-due').textContent = nextDue || '—';
+    document.getElementById('emi-principal-outstanding').textContent = fmtINR(principalOut);
+    document.getElementById('emi-interest-outstanding').textContent = fmtINR(interestOut);
+    document.getElementById('emi-gst-outstanding').textContent = fmtINR(gstOut);
+    document.getElementById('emi-total-outstanding').textContent = fmtINR(totalOut);
+
+    const monthKeys = Object.keys(upcomingByMonth).sort();
+    if (monthKeys.length) {
+      renderBarChart('emi-upcoming-chart', monthKeys.map(k => k), monthKeys.map(k => upcomingByMonth[k]));
+    } else {
+      document.getElementById('emi-upcoming-chart').innerHTML = `<div class="empty-state">No upcoming obligations.</div>`;
+    }
+
+    listEl.innerHTML = planCards.join('');
+  }
+
+  window.toggleEmiSchedule = async function (planId) {
+    const el = document.getElementById(`emi-schedule-${planId}`);
+    if (el.style.display === 'block') { el.style.display = 'none'; return; }
+
+    const { data: schedule } = await sb.from('emi_schedule').select('*').eq('emi_plan_id', planId).order('installment_number');
+    el.innerHTML = `
+      <div style="border-top:1px solid var(--border); padding-top:10px;">
+        ${(schedule || []).map(s => `
+          <div class="txn-row" style="grid-template-columns: 40px 90px 100px 100px 90px 90px 70px 100px; font-size:10px;">
+            <div>#${s.installment_number}</div>
+            <div class="txn-date">${s.due_date}</div>
+            <div>${fmtINR(s.opening_principal)}</div>
+            <div>${fmtINR(s.emi_amount)}</div>
+            <div>${fmtINR(s.principal_component)}</div>
+            <div>${fmtINR(s.interest_component)}</div>
+            <div>${fmtINR(s.gst_component)}</div>
+            <div style="color:${s.payment_status === 'paid' ? 'var(--green)' : 'var(--text-dim)'};">${s.payment_status}</div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    el.style.display = 'block';
+  };
+
+  window.recordEmiPayment = async function (scheduleId, planId) {
+    const { data: row } = await sb.from('emi_schedule').select('*').eq('id', scheduleId).single();
+    if (!row) return;
+
+    const { data: accounts } = await sb.from('accounts').select('id, name').neq('type', 'credit_card').order('created_at');
+    const accountNames = (accounts || []).map((a, i) => `${i + 1}. ${a.name}`).join('\n');
+    const accIdxStr = prompt(`Pay installment #${row.installment_number} (Principal ${fmtINR(row.principal_component)} + Interest ${fmtINR(row.interest_component)} + GST ${fmtINR(row.gst_component)}) from which account?\n${accountNames}\nEnter number:`);
+    if (accIdxStr === null) return;
+    const accIdx = parseInt(accIdxStr, 10) - 1;
+    if (!accounts || accIdx < 0 || accIdx >= accounts.length) { alert('Invalid account selection.'); return; }
+    const payingAccountId = accounts[accIdx].id;
+
+    const { data: { user } } = await sb.auth.getUser();
+    const paidDate = new Date().toISOString().slice(0, 10);
+
+    // Principal - visible cash movement, excluded from expense analytics
+    const { data: principalTxn, error: pError } = await sb.from('transactions').insert({
+      user_id: user.id, account_id: payingAccountId, type: 'emi_principal', category: 'EMI Principal',
+      amount: row.principal_component, txn_date: paidDate, note: `EMI #${row.installment_number} principal`
+    }).select('id').single();
+    if (pError) { alert('Error: ' + pError.message); return; }
+
+    // Interest + GST - the only real expense
+    const interestGstAmount = Number(row.interest_component) + Number(row.gst_component);
+    let interestTxnId = null;
+    if (interestGstAmount > 0) {
+      const { data: interestTxn, error: iError } = await sb.from('transactions').insert({
+        user_id: user.id, account_id: payingAccountId, type: 'expense', category: 'EMI Interest & Charges',
+        amount: interestGstAmount, txn_date: paidDate, note: `EMI #${row.installment_number} interest + GST`
+      }).select('id').single();
+      if (iError) { alert('Error: ' + iError.message); return; }
+      interestTxnId = interestTxn.id;
+    }
+
+    await sb.from('emi_schedule').update({
+      payment_status: 'paid', paid_date: paidDate,
+      principal_transaction_id: principalTxn.id, interest_transaction_id: interestTxnId
+    }).eq('id', scheduleId);
+
+    // Auto-complete the plan if this was the last pending installment
+    const { data: stillPending } = await sb.from('emi_schedule').select('id').eq('emi_plan_id', planId).eq('payment_status', 'pending');
+    if (!stillPending || stillPending.length === 0) {
+      await sb.from('emi_plans').update({ status: 'completed' }).eq('id', planId);
+    }
+
+    await loadEmiPlans();
+    await loadAccounts();
+    await loadDashboard();
+  };
+
+  window.deleteEmiPlan = async function (planId) {
+    if (!confirm('Delete this entire EMI plan? All linked transactions (conversion, fees, and any paid installments) will be removed and balances reversed.')) return;
+
+    const { data: plan } = await sb.from('emi_plans').select('*').eq('id', planId).single();
+    const { data: schedule } = await sb.from('emi_schedule').select('*').eq('emi_plan_id', planId);
+
+    const txnIds = [];
+    if (plan?.conversion_transaction_id) txnIds.push(plan.conversion_transaction_id);
+    if (plan?.processing_fee_transaction_id) txnIds.push(plan.processing_fee_transaction_id);
+    (schedule || []).forEach(s => {
+      if (s.principal_transaction_id) txnIds.push(s.principal_transaction_id);
+      if (s.interest_transaction_id) txnIds.push(s.interest_transaction_id);
+    });
+
+    // emi_schedule rows cascade-delete with the plan; delete the plan first, then clean up transactions
+    await sb.from('emi_plans').delete().eq('id', planId);
+    for (const id of txnIds) {
+      await sb.from('transactions').delete().eq('id', id);
+    }
+
+    await loadEmiPlans();
+    await loadAccounts();
+    await loadCreditCards();
+    await loadTransactions();
+    await loadDashboard();
+  };
+
   // ---------- INVESTMENTS ----------
 
   const invForm = document.getElementById('inv-form');
@@ -3205,7 +3612,8 @@
       ? recentTxns.map(t => {
           const isTransfer = t.type === 'transfer';
           const isInvestment = t.type === 'investment_buy' || t.type === 'investment_sell';
-          const isNeutral = isTransfer || isInvestment;
+          const isEmi = t.type === 'emi_conversion' || t.type === 'emi_principal';
+          const isNeutral = isTransfer || isInvestment || isEmi;
           const amountClass = isNeutral ? '' : t.type;
           const amountPrefix = isNeutral ? '' : (t.type === 'income' ? '+' : '−');
           const accountLabel = isTransfer
@@ -3382,24 +3790,26 @@
     listEl.innerHTML = txns.map(t => {
       const isTransfer = t.type === 'transfer';
       const isInvestment = t.type === 'investment_buy' || t.type === 'investment_sell';
-      const isNeutral = isTransfer || isInvestment;
+      const isEmi = t.type === 'emi_conversion' || t.type === 'emi_principal';
+      const isNeutral = isTransfer || isInvestment || isEmi;
       const amountClass = isNeutral ? '' : t.type;
       const amountPrefix = isNeutral ? '' : (t.type === 'income' ? '+' : '−');
       const accountLabel = isTransfer
         ? `${t.accounts?.name || '—'} → ${t.to_account?.name || '—'}`
         : (t.accounts?.name || '—');
       const catLabel = isTransfer ? 'Transfer' : (t.category || '');
+      const manageNote = isInvestment ? 'Investments' : (isEmi ? 'EMI' : null);
       return `
       <div class="txn-row">
         <div class="txn-date">${t.txn_date}</div>
         <div>
-          <span class="txn-cat">${catLabel}${isInvestment ? ' <span style="font-size:9px; color:var(--text-dim);">(manage in Investments)</span>' : ''}</span>
+          <span class="txn-cat">${catLabel}${manageNote ? ` <span style="font-size:9px; color:var(--text-dim);">(manage in ${manageNote})</span>` : ''}</span>
           ${t.note ? `<span class="txn-note">${t.note}</span>` : ''}
         </div>
         <div class="txn-account">${accountLabel}</div>
         <div class="txn-amount ${amountClass}" style="${isNeutral ? 'color:var(--text-dim);' : ''}">${amountPrefix}${fmtINR(t.amount)}</div>
         <div class="txn-row-actions">
-          ${isInvestment ? '' : `<button type="button" onclick='editTxn(${JSON.stringify(t)})'>Edit</button>`}
+          ${(isInvestment || isEmi) ? '' : `<button type="button" onclick='editTxn(${JSON.stringify(t)})'>Edit</button>`}
           <button type="button" class="delete" onclick="deleteTxn('${t.id}')">Delete</button>
         </div>
       </div>
@@ -3433,6 +3843,9 @@
     } else if (txnRow && txnRow.type === 'investment_sell') {
       if (!confirm('Delete this sale? This will also remove the linked sale record and reverse the bank balance.')) return;
       await sb.from('investment_sales').delete().eq('transaction_id', id);
+    } else if (txnRow && (txnRow.type === 'emi_conversion' || txnRow.type === 'emi_principal')) {
+      alert('This transaction belongs to an EMI plan and can\'t be deleted from here — it would leave the EMI schedule out of sync. Go to the EMI page and use "Delete Plan" instead, which cleans up everything together.');
+      return;
     } else {
       if (!confirm('Delete this transaction? The linked account balance will be reversed automatically.')) return;
     }
