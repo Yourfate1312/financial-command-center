@@ -466,6 +466,7 @@
       <div class="nav-item" data-page="calendar">Calendar</div>
       <div class="nav-item" data-page="documents">Documents</div>
       <div class="nav-item" data-page="settings">Settings</div>
+      <div class="nav-item" data-page="reconciliation">Reconciliation</div>
     </div>
 
     <div class="main">
@@ -1386,6 +1387,45 @@
           Exports everything: accounts, transactions, bets, trades, loans, investments, rewards, goals. Keep this somewhere safe.
         </p>
       </div>
+
+      <div id="page-reconciliation" class="page" style="display:none;">
+        <div class="section-title">Reconciliation Status</div>
+        <p style="font-size:11px; color:var(--text-dim); margin:-4px 0 14px;">
+          Expected Balance is reconstructed from your most recent reconciliation for each account, plus every transaction since. An account with no reconciliation yet shows "Insufficient History" — there's no trusted anchor to reconstruct from.
+        </p>
+        <div id="reconciliation-status-table"><div class="loading-state">Loading…</div></div>
+
+        <div class="section-title">Enter a Reconciliation</div>
+        <p style="font-size:11px; color:var(--text-dim); margin:-4px 0 14px;">
+          This only records the comparison — it never changes your account balance or transaction history.
+        </p>
+        <form id="recon-form" class="txn-form">
+          <div class="txn-form-grid">
+            <div class="field">
+              <label for="recon-account">Account</label>
+              <select id="recon-account" required></select>
+            </div>
+            <div class="field">
+              <label for="recon-date">Reconciliation Date</label>
+              <input type="date" id="recon-date" required>
+            </div>
+            <div class="field">
+              <label for="recon-actual">Actual Statement Balance (₹)</label>
+              <input type="number" id="recon-actual" step="0.01" required>
+            </div>
+            <div class="field">
+              <label for="recon-note">Note (optional)</label>
+              <input type="text" id="recon-note" placeholder="e.g. matched against bank statement">
+            </div>
+          </div>
+          <button type="submit" class="btn-primary" id="recon-submit-btn" style="width:auto; padding:11px 28px;">Record Reconciliation</button>
+          <div class="login-error" id="recon-error"></div>
+          <div class="login-error" id="recon-result" style="display:none; color:var(--amber); background:rgba(255,176,32,0.08); border-color:var(--amber-dim);"></div>
+        </form>
+
+        <div class="section-title">Reconciliation History</div>
+        <div id="recon-history-list"><div class="loading-state">Loading…</div></div>
+      </div>
     </div>
   </div>
 </div>
@@ -1461,6 +1501,9 @@
     await loadCalendar();
     await loadDocuments();
     await loadSettings();
+    await populateReconciliationAccountDropdown();
+    await loadReconciliationStatus();
+    await loadReconciliationHistory();
     await loadDashboard();
   }
 
@@ -3461,6 +3504,173 @@
     }
     downloadFile(JSON.stringify(backup, null, 2), `fcc-backup-${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
   });
+
+  // ---------- RECONCILIATION ENGINE ----------
+  // Mirrors the exact direction logic of the live database triggers (apply_transaction_to_balance
+  // and friends) so Expected Balance is computed the same way the real balance was built.
+
+  function txnDeltaForAccount(txn, accountId, accountType) {
+    const amt = Number(txn.amount);
+    const isFrom = txn.account_id === accountId;
+    const isTo = txn.to_account_id === accountId;
+    const isCC = accountType === 'credit_card';
+    let delta = 0;
+
+    if (txn.type === 'income' && isFrom) {
+      delta += isCC ? -amt : amt;
+    } else if (txn.type === 'expense' && isFrom) {
+      delta += isCC ? amt : -amt;
+    } else if (txn.type === 'transfer') {
+      if (isFrom) delta += isCC ? amt : -amt;
+      if (isTo) delta += isCC ? -amt : amt;
+    } else if (txn.type === 'investment_buy' && isFrom) {
+      delta += isCC ? amt : -amt;
+    } else if (txn.type === 'investment_sell' && isFrom) {
+      delta += isCC ? -amt : amt;
+    } else if (txn.type === 'emi_conversion' && isFrom) {
+      delta += -amt;
+    } else if (txn.type === 'emi_principal' && isFrom) {
+      delta += -amt;
+    }
+    return delta;
+  }
+
+  async function populateReconciliationAccountDropdown() {
+    const { data: accounts } = await sb.from('accounts').select('id, name').order('name');
+    document.getElementById('recon-account').innerHTML = (accounts || []).map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+  }
+  document.getElementById('recon-date').valueAsDate = new Date();
+
+  async function loadReconciliationStatus() {
+    const tableEl = document.getElementById('reconciliation-status-table');
+    const { data: accounts } = await sb.from('accounts').select('*').order('name');
+    if (!accounts || accounts.length === 0) {
+      tableEl.innerHTML = `<div class="empty-state">No accounts yet.</div>`;
+      return;
+    }
+
+    const rows = [];
+    for (const acc of accounts) {
+      const { data: lastRecon } = await sb
+        .from('account_reconciliations')
+        .select('*')
+        .eq('account_id', acc.id)
+        .order('reconciliation_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let expected = null, status, statusColor;
+
+      if (!lastRecon) {
+        status = 'INSUFFICIENT HISTORY';
+        statusColor = 'var(--text-dim)';
+      } else {
+        const { data: txnsSince } = await sb
+          .from('transactions')
+          .select('type, amount, account_id, to_account_id')
+          .or(`account_id.eq.${acc.id},to_account_id.eq.${acc.id}`)
+          .gt('txn_date', lastRecon.reconciliation_date);
+
+        const delta = (txnsSince || []).reduce((s, t) => s + txnDeltaForAccount(t, acc.id, acc.type), 0);
+        expected = Number(lastRecon.actual_statement_balance) + delta;
+        const diff = Number(acc.balance) - expected;
+        status = Math.abs(diff) < 0.01 ? 'RECONCILED' : 'DIFFERENCE';
+        statusColor = status === 'RECONCILED' ? 'var(--green)' : 'var(--red)';
+      }
+
+      const diffDisplay = expected === null ? '—' : fmtINR(Number(acc.balance) - expected);
+
+      rows.push(`
+        <div class="txn-row" style="grid-template-columns: 1fr 120px 120px 110px 140px;">
+          <div class="txn-cat">${acc.name}</div>
+          <div class="txn-account">${fmtINR(acc.balance)}</div>
+          <div class="txn-account">${expected === null ? '—' : fmtINR(expected)}</div>
+          <div class="txn-account">${diffDisplay}</div>
+          <div style="color:${statusColor}; font-size:11px; font-weight:700;">${status}</div>
+        </div>
+      `);
+    }
+
+    tableEl.innerHTML = `
+      <div class="txn-row" style="grid-template-columns: 1fr 120px 120px 110px 140px; color:var(--text-dim); font-size:10px; text-transform:uppercase; letter-spacing:1px;">
+        <div>Account</div><div>Actual</div><div>Expected</div><div>Difference</div><div>Status</div>
+      </div>
+      ${rows.join('')}
+    `;
+  }
+
+  document.getElementById('recon-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById('recon-error');
+    const resultEl = document.getElementById('recon-result');
+    errEl.style.display = 'none';
+    resultEl.style.display = 'none';
+
+    const { data: { user } } = await sb.auth.getUser();
+    const accountId = document.getElementById('recon-account').value;
+    const reconDate = document.getElementById('recon-date').value;
+    const actualBalance = parseFloat(document.getElementById('recon-actual').value);
+    const note = document.getElementById('recon-note').value || null;
+
+    const { data: acc } = await sb.from('accounts').select('balance').eq('id', accountId).single();
+    const systemBalance = Number(acc.balance);
+    const difference = systemBalance - actualBalance;
+
+    const { error } = await sb.from('account_reconciliations').insert({
+      user_id: user.id, account_id: accountId, reconciliation_date: reconDate,
+      actual_statement_balance: actualBalance, system_balance_at_time: systemBalance,
+      difference, note
+    });
+
+    if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+
+    resultEl.textContent = Math.abs(difference) < 0.01
+      ? `Recorded. System balance matched the statement exactly.`
+      : `Recorded. System balance was ${fmtINR(systemBalance)}, statement says ${fmtINR(actualBalance)} — a difference of ${fmtINR(difference)}. Nothing was changed automatically.`;
+    resultEl.style.display = 'block';
+
+    document.getElementById('recon-form').reset();
+    document.getElementById('recon-date').valueAsDate = new Date();
+    await loadReconciliationStatus();
+    await loadReconciliationHistory();
+  });
+
+  async function loadReconciliationHistory() {
+    const listEl = document.getElementById('recon-history-list');
+    const { data: history, error } = await sb
+      .from('account_reconciliations')
+      .select('*, accounts(name)')
+      .order('reconciliation_date', { ascending: false })
+      .limit(30);
+
+    if (error) { listEl.innerHTML = `<div class="empty-state">Error: ${error.message}</div>`; return; }
+    if (!history || history.length === 0) { listEl.innerHTML = `<div class="empty-state">No reconciliations recorded yet.</div>`; return; }
+
+    listEl.innerHTML = history.map(r => {
+      const isOff = Math.abs(Number(r.difference)) >= 0.01;
+      return `
+        <div class="txn-row" style="grid-template-columns: 100px 1fr 120px auto;">
+          <div class="txn-date">${r.reconciliation_date}</div>
+          <div>
+            <span class="txn-cat">${r.accounts?.name || '—'}</span>
+            <span class="txn-note">system ${fmtINR(r.system_balance_at_time)} vs statement ${fmtINR(r.actual_statement_balance)}${r.note ? ' · ' + r.note : ''}</span>
+          </div>
+          <div class="txn-amount" style="color: ${isOff ? 'var(--red)' : 'var(--green)'};">${fmtINR(r.difference)}</div>
+          <div class="txn-row-actions">
+            <button type="button" class="delete" onclick="deleteReconciliation('${r.id}')">Delete</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  window.deleteReconciliation = async function (id) {
+    if (!confirm('Delete this reconciliation record? This only removes the record itself — no balances are affected.')) return;
+    const { error } = await sb.from('account_reconciliations').delete().eq('id', id);
+    if (error) { alert('Error: ' + error.message); return; }
+    await loadReconciliationStatus();
+    await loadReconciliationHistory();
+  };
 
   // ---------- DASHBOARD ----------
 
