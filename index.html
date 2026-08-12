@@ -1384,7 +1384,7 @@
         <div class="section-title">Data Backup</div>
         <button type="button" class="btn-ghost" id="export-all-btn">Download Full Backup (JSON)</button>
         <p style="font-size:11px; color:var(--text-dim); margin-top:10px;">
-          Exports everything: accounts, transactions, bets, trades, loans, investments, rewards, goals. Keep this somewhere safe.
+          Exports all 16 tables: accounts, transactions, bets, trades, crypto_trades, loans, investments, investment_lots, investment_sales, emi_plans, emi_schedule, rewards, goals, documents, account_reconciliations, profiles. Keep this file somewhere safe — it is the only backup of your financial history.
         </p>
       </div>
 
@@ -3496,7 +3496,12 @@
   });
 
   document.getElementById('export-all-btn').addEventListener('click', async () => {
-    const tables = ['accounts', 'transactions', 'bets', 'trades', 'loans', 'investments', 'rewards', 'goals', 'documents'];
+    const tables = [
+      'accounts', 'transactions', 'bets', 'trades', 'crypto_trades',
+      'loans', 'investments', 'investment_lots', 'investment_sales',
+      'emi_plans', 'emi_schedule', 'rewards', 'goals', 'documents',
+      'account_reconciliations', 'profiles'
+    ];
     const backup = {};
     for (const t of tables) {
       const { data } = await sb.from(t).select('*');
