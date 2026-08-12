@@ -1,52 +1,53 @@
 # FCC CHANGELOG
 
-This file records meaningful architectural and financial changes to the Financial Command Center.
+## 2026-08-13 — Complete Database Backup Coverage
 
----
+**Change:** Extended the existing "Download Full Backup (JSON)" button in Settings to cover all 16 database tables (was previously 9/16).
 
-## CHANGELOG FORMAT
+**Tables added to backup:**
+- `crypto_trades`
+- `investment_lots` ⭐ (critical — contains actual investment cost-basis history)
+- `investment_sales` ⭐ (critical — contains realized P&L records)
+- `emi_plans`
+- `emi_schedule`
+- `account_reconciliations`
+- `profiles`
 
-### [DATE] — [CHANGE TITLE]
+**Backup method:** Client-side JSON export via browser download. No new infrastructure introduced. Extended existing button.
 
-**Requested change:**
+**Storage:** User's local device (downloaded file). No cloud storage, no automation.
 
-**Reason:**
+**Coverage:** 16/16 tables.
 
-**Previous behaviour:**
+**Cost:** ₹0.
 
-**New behaviour:**
+**How to create a backup:**
+1. Open FCC → Settings page
+2. Click "Download Full Backup (JSON)"
+3. Save the downloaded `.json` file somewhere safe (Google Drive, email to yourself, etc.)
 
-**Files changed:**
+**How to restore financial DATA:**
+The JSON backup can be reimported into Supabase via:
+1. Go to Supabase → SQL Editor
+2. For each table, use INSERT statements built from the JSON arrays
+3. Restore in dependency order: profiles → accounts → transactions → investments → investment_lots → investment_sales → loans → bets → trades → crypto_trades → emi_plans → emi_schedule → rewards → goals → documents → account_reconciliations
+4. Note: foreign key ordering matters. Restore parent tables before child tables.
 
-**Database changes:**
+**How to restore DATABASE STRUCTURE:**
+The database structure (tables, enums, triggers, functions, RLS policies) is NOT included in the JSON backup. To restore structure:
+- Re-run all SQL migrations from this conversation history in order (001–022)
+- The migration history in the conversation is the only source of truth for structure
 
-**Financial impact:**
+**What cannot be restored automatically:**
+- Database schema (tables, enums, types, triggers, functions, RLS policies) — requires re-running migrations manually
+- auth.users entries (Supabase Auth) — must be recreated manually; the `profiles` table backup covers app data but not the auth credentials
+- The `user_id` foreign keys in all tables reference `auth.users.id` — if the user is recreated with a different UUID, all records must be updated
 
-**Net Worth impact:**
+**Limitations:**
+- Manual only — no automation, no scheduling
+- Stored locally only — depends on user remembering to run it
+- No incremental backup — always a full export
+- No encryption — the JSON file contains all financial data in plaintext; store securely
+- Supabase free tier retains its own internal backups for 7 days (Point-in-Time Recovery not available on free tier)
 
-**Liquidity impact:**
-
-**Analytics impact:**
-
-**Security/RLS impact:**
-
-**Testing performed:**
-
-**Remaining issues:**
-
-**AI/Developer:**
-
----
-
-# CHANGELOG RULES
-
-Every significant financial architecture change should be documented here.
-
-Do not record trivial UI styling changes.
-
-Do not rewrite historical entries.
-
-If an architectural decision is reversed, record the reversal as a new entry rather than deleting history.
-
-The changelog should allow another AI to understand why important financial decisions were made.
-
+**Files modified:** `index.html` (Settings page backup button + description text only)
