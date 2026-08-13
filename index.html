@@ -454,6 +454,7 @@
       <div class="nav-item" data-page="transactions">Transactions</div>
       <div class="nav-item" data-page="loans">Debtors &amp; Creditors</div>
       <div class="nav-item" data-page="gambling">Gambling</div>
+      <div class="nav-item" data-page="snooker">Snooker</div>
       <div class="nav-item" data-page="trading">Trading</div>
       <div class="nav-item" data-page="crypto">Crypto</div>
       <div class="nav-item" data-page="creditcards">Credit Cards</div>
@@ -556,6 +557,8 @@
                 <option value="trading">Trading</option>
                 <option value="credit_card">Credit Card</option>
                 <option value="fd">Fixed Deposit</option>
+                <option value="gambling">Gambling Capital</option>
+                <option value="snooker">Snooker Capital</option>
               </select>
             </div>
             <div class="field">
@@ -689,6 +692,34 @@
       </div>
 
       <div id="page-gambling" class="page" style="display:none;">
+        <div class="section-title">Capital & Funding</div>
+        <div class="summary-row">
+          <div class="summary-cell">
+            <div class="label">Funding Allocated</div>
+            <div class="value" id="gambl-funding" style="color: var(--green);">—</div>
+            <div class="sub">Transferred in from your accounts</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Withdrawals</div>
+            <div class="value" id="gambl-withdrawals" style="color: var(--red);">—</div>
+            <div class="sub">Transferred out to your accounts</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Net Capital Allocated</div>
+            <div class="value amber" id="gambl-net-capital">—</div>
+            <div class="sub">Funding − Withdrawals</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Gambling Capital Balance</div>
+            <div class="value" id="gambl-account-balance">—</div>
+            <div class="sub">From Accounts page (updated manually)</div>
+          </div>
+        </div>
+        <p style="font-size:11px; color:var(--text-dim); margin:-4px 0 20px;">
+          Use the <strong style="color:var(--amber);">Transfer</strong> option on the Transactions page to fund or withdraw from the Gambling Capital account. Funding is NOT a personal expense — it is capital allocation, same as Trading/Crypto.
+        </p>
+
+        <div class="section-title">Performance</div>
         <div class="summary-row">
           <div class="summary-cell">
             <div class="label">Net P/L</div>
@@ -839,6 +870,57 @@
 
         <div class="section-title">Bet History</div>
         <div id="bet-list"><div class="loading-state">Loading bets…</div></div>
+      </div>
+
+      <div id="page-snooker" class="page" style="display:none;">
+        <div class="section-title">Capital & Funding</div>
+        <div class="summary-row">
+          <div class="summary-cell">
+            <div class="label">Funding Allocated</div>
+            <div class="value" id="snookr-funding" style="color: var(--green);">—</div>
+            <div class="sub">Transferred in from your accounts</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Withdrawals</div>
+            <div class="value" id="snookr-withdrawals" style="color: var(--red);">—</div>
+            <div class="sub">Transferred out to your accounts</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Net Capital Allocated</div>
+            <div class="value amber" id="snookr-net-capital">—</div>
+            <div class="sub">Funding − Withdrawals</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Snooker Capital Balance</div>
+            <div class="value" id="snookr-account-balance">—</div>
+            <div class="sub">From Accounts page (updated manually)</div>
+          </div>
+        </div>
+        <p style="font-size:11px; color:var(--text-dim); margin:-4px 0 20px;">
+          Use the <strong style="color:var(--amber);">Transfer</strong> option on the Transactions page to fund or withdraw from the Snooker Capital account. Funding is NOT a personal expense.
+        </p>
+
+        <div class="section-title">Performance — Snooker Bets</div>
+        <div class="summary-row">
+          <div class="summary-cell">
+            <div class="label">Net P/L</div>
+            <div class="value" id="snooker-net-pl">—</div>
+            <div class="sub">From Snooker (Bets) records</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Win Rate</div>
+            <div class="value" id="snooker-win-rate">—</div>
+            <div class="sub" id="snooker-win-count">—</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Total Staked</div>
+            <div class="value" id="snooker-total-staked">—</div>
+            <div class="sub">Returned: <span id="snooker-total-returned">—</span></div>
+          </div>
+        </div>
+
+        <div class="section-title">Snooker Bet History</div>
+        <div id="snooker-bet-list"><div class="loading-state">Loading…</div></div>
       </div>
 
       <div id="page-trading" class="page" style="display:none;">
@@ -1490,6 +1572,9 @@
     await loadCryptoTrades();
     await loadCapitalFlow('trading', 'trade');
     await loadCapitalFlow('crypto', 'crypto');
+    await loadCapitalFlow('gambling', 'gambl');
+    await loadCapitalFlow('snooker', 'snookr');
+    await loadSnookerPerformance();
     await loadCreditCards();
     await populateEmiCardDropdown();
     await loadEmiPlans();
@@ -3786,6 +3871,60 @@
       : `<div class="empty-state">No transactions yet.</div>`;
   }
 
+  // ---------- SNOOKER PERFORMANCE ----------
+  // Reads from bets table filtered to sport = 'Snooker (Bets)'.
+  // Capital flow is handled by loadCapitalFlow('snooker', 'snookr') — same pattern as Trading/Crypto.
+
+  async function loadSnookerPerformance() {
+    const listEl = document.getElementById('snooker-bet-list');
+    if (!listEl) return;
+
+    const { data: snookerBets, error } = await sb
+      .from('bets')
+      .select('*')
+      .eq('sport', 'Snooker (Bets)')
+      .order('bet_date', { ascending: false });
+
+    if (error) { listEl.innerHTML = `<div class="empty-state">Error: ${error.message}</div>`; return; }
+
+    const settled = (snookerBets || []).filter(b => b.outcome !== 'pending');
+    const staked = settled.reduce((s, b) => s + Number(b.stake), 0);
+    const returned = settled.reduce((s, b) => s + betPayout(b), 0);
+    const netPL = returned - staked;
+    const wins = settled.filter(b => b.outcome === 'win').length;
+    const winRate = settled.length ? (wins / settled.length * 100).toFixed(1) + '%' : '—';
+
+    const netPLEl = document.getElementById('snooker-net-pl');
+    if (netPLEl) {
+      netPLEl.textContent = (netPL >= 0 ? '+' : '') + fmtINR(netPL);
+      netPLEl.style.color = netPL >= 0 ? 'var(--green)' : 'var(--red)';
+    }
+    const wrEl = document.getElementById('snooker-win-rate');
+    if (wrEl) wrEl.textContent = winRate;
+    const wcEl = document.getElementById('snooker-win-count');
+    if (wcEl) wcEl.textContent = `${wins}/${settled.length} settled`;
+    const tsEl = document.getElementById('snooker-total-staked');
+    if (tsEl) tsEl.textContent = fmtINR(staked);
+    const trEl = document.getElementById('snooker-total-returned');
+    if (trEl) trEl.textContent = fmtINR(returned);
+
+    if (!snookerBets || snookerBets.length === 0) {
+      listEl.innerHTML = `<div class="empty-state">No Snooker bets recorded yet.</div>`;
+      return;
+    }
+
+    const outcomeColor = { win: 'income', loss: 'expense', push: '', pending: '' };
+    listEl.innerHTML = snookerBets.map(b => `
+      <div class="txn-row" style="grid-template-columns: 90px 1fr 90px 90px auto;">
+        <div class="txn-date">${b.bet_date}</div>
+        <div><span class="txn-cat">Snooker (Bets)</span>${b.match ? `<span class="txn-note">${b.match}</span>` : ''}</div>
+        <div class="txn-account">₹${b.stake} @ ${b.odds}</div>
+        <div class="txn-amount ${outcomeColor[b.outcome]}" style="text-transform:uppercase; font-size:11px;">${b.outcome}</div>
+        <div></div>
+      </div>
+    `).join('');
+  }
+
   // ---------- PAGE NAVIGATION ----------
   document.querySelectorAll('.nav-item[data-page]').forEach(item => {
     item.addEventListener('click', () => {
@@ -3804,12 +3943,10 @@
       'Food & Dining', 'Groceries', 'Transport', 'Fuel', 'Shopping', 'Clothing',
       'Personal Care', 'Medical', 'Entertainment', 'Subscriptions', 'Education',
       'Mobile & Internet', 'Gifts & Donations', 'Miscellaneous',
-      'Gambling', 'Snooker',
       'Windfall Loss'
     ],
     income: [
-      'Pocket Money', 'Gambling Winnings', 'Snooker Winnings',
-      'Windfall Gains', 'Stipend', 'Other Income'
+      'Pocket Money', 'Windfall Gains', 'Stipend', 'Other Income'
     ]
   };
 
@@ -3915,6 +4052,8 @@
     await loadTransactions();
     await loadCapitalFlow('trading', 'trade');
     await loadCapitalFlow('crypto', 'crypto');
+    await loadCapitalFlow('gambling', 'gambl');
+    await loadCapitalFlow('snooker', 'snookr');
   });
 
   async function loadTransactions() {
@@ -4006,6 +4145,8 @@
     await loadTransactions();
     await loadCapitalFlow('trading', 'trade');
     await loadCapitalFlow('crypto', 'crypto');
+    await loadCapitalFlow('gambling', 'gambl');
+    await loadCapitalFlow('snooker', 'snookr');
     await loadHoldings();
     await loadDashboard();
   };
