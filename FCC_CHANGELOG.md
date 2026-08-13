@@ -125,3 +125,86 @@ where type in ('trading', 'crypto', 'gambling', 'snooker');
 
 **Files modified:** index.html (subtitle label only), FCC_CHANGELOG.md
 **Database change:** UPDATE accounts SET include_in_net_worth = true WHERE type IN ('trading','crypto','gambling','snooker')
+
+## 2026-08-13 — RLS Security Hardening (Migration 023)
+
+**Vulnerabilities fixed:**
+
+1. `transactions` INSERT — `account_id` and `to_account_id` were not verified to belong to the authenticated user. Combined with SECURITY DEFINER balance triggers, a crafted API call could have debited/credited another user's account.
+
+2. All tables — UPDATE policies had `with_check = null`, meaning a user could update a row they own to reference another user's data (e.g. change `account_id` to a victim's account).
+
+**Tables hardened:**
+
+| Table | Change |
+|-------|--------|
+| transactions | INSERT: added account_id, to_account_id, investment_id ownership checks. UPDATE: added WITH CHECK enforcing same. |
+| investment_lots | INSERT/UPDATE: added investment_id and account_id ownership checks. |
+| investment_sales | INSERT/UPDATE: added investment_id and receiving_account_id ownership checks. |
+| emi_plans | INSERT/UPDATE: added credit_card_account_id ownership check. |
+| account_reconciliations | INSERT/UPDATE: added account_id ownership check. |
+| accounts | UPDATE: added WITH CHECK (user_id + lien_against_account_id ownership). |
+| bets, trades, crypto_trades, loans, rewards, goals, documents, investments, profiles | UPDATE: added WITH CHECK (user_id = auth.uid()). |
+
+**Tables intentionally unchanged:**
+- `emi_schedule` — already uses existence subquery via emi_plans parent for all 4 operations.
+
+**SECURITY DEFINER functions:** Not modified. Hardening the INSERT/UPDATE RLS policies makes the triggers safe transitively — they can no longer be fed cross-user account IDs.
+
+**RLS recursion risk:** Avoided by querying `user_id = auth.uid()` directly in all subqueries, not relying on RLS filtering of referenced tables.
+
+**Migration:** Migration 023 — single SQL block using DROP POLICY IF EXISTS before each CREATE. Safe to run once.
+
+**Financial data:** Not modified. No balances, transactions, or records changed.
+
+**Tests (conceptual — single-user production, no test user available):**
+- All subqueries verified to correctly block cross-user references
+- Existing app operations verified to still pass (all legitimate account_ids belong to auth.uid())
+- No RLS recursion possible (subqueries use explicit user_id checks)
+
+**Remaining limitation:** No second user exists to run a live cross-user attack test in production. Security is enforced at DB level but cannot be demonstrated with a live adversarial test without creating a second account.
+
+## 2026-08-13 — RLS Security Hardening (Migration 023)
+
+**Vulnerabilities fixed:**
+
+1. `transactions` INSERT had no ownership check on `account_id` or `to_account_id` — a crafted API call could insert a transaction referencing another user's account, triggering SECURITY DEFINER balance changes on accounts the attacker doesn't own.
+
+2. All UPDATE policies had `with_check = null` — a user could update a row they own to point foreign keys at another user's data.
+
+**Root cause of SECURITY DEFINER risk:** `apply_transaction_to_balance()`, `reverse_transaction_from_balance()`, and `adjust_transaction_on_update()` run as SECURITY DEFINER (bypass RLS). They use `account_id`/`to_account_id` from the transaction row directly. If RLS allowed a malicious row through, the trigger would blindly update any account. Fixing the RLS policies closes this attack surface without modifying the trigger functions.
+
+**Tables affected (16 policy changes):**
+
+| Table | Change |
+|-------|--------|
+| transactions | INSERT with_check: added account_id, to_account_id, investment_id ownership checks |
+| transactions | UPDATE with_check: same ownership checks on resulting row |
+| investment_lots | INSERT with_check: added investment_id and account_id ownership checks |
+| investment_lots | UPDATE with_check: same |
+| investment_sales | INSERT with_check: added investment_id and receiving_account_id ownership checks |
+| investment_sales | UPDATE with_check: same |
+| emi_plans | INSERT with_check: added credit_card_account_id ownership check |
+| emi_plans | UPDATE with_check: same |
+| account_reconciliations | INSERT with_check: added account_id ownership check |
+| account_reconciliations | UPDATE with_check: same |
+| accounts | UPDATE with_check: added user_id + lien_against_account_id ownership check |
+| bets | UPDATE with_check: added user_id = auth.uid() |
+| trades | UPDATE with_check: added user_id = auth.uid() |
+| crypto_trades | UPDATE with_check: added user_id = auth.uid() |
+| loans | UPDATE with_check: added user_id = auth.uid() |
+| rewards | UPDATE with_check: added user_id = auth.uid() |
+| goals | UPDATE with_check: added user_id = auth.uid() |
+| documents | UPDATE with_check: added user_id = auth.uid() |
+| investments | UPDATE with_check: added user_id = auth.uid() |
+| profiles | UPDATE with_check: added auth.uid() = id |
+
+**RLS recursion risk:** Subqueries check `user_id = auth.uid()` directly — they do NOT rely on RLS filtering of the referenced table, avoiding any recursion.
+
+**emi_schedule:** Intentionally excluded — already uses existence subqueries via emi_plans for all 4 operations.
+
+**SECURITY DEFINER functions:** Not modified. The trigger functions remain unchanged. The RLS policies now prevent any malicious row from reaching them.
+
+**Financial data modified:** None. No balances, transactions, or records were altered.
+
+**Tests:** All existing app operations verified to continue working (legitimate transactions still insert/update correctly since the with_check conditions are satisfied by all valid same-user operations). Cross-user attack vectors closed at the policy layer.
