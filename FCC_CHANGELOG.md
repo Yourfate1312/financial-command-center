@@ -91,3 +91,37 @@ The database structure (tables, enums, triggers, functions, RLS policies) is NOT
 - Withdrawal increases liquidity ✅
 
 **Tests:** Logic verified via code inspection and architecture trace. No destructive tests run against production data.
+
+## 2026-08-13 — Net Worth Capital Allocation Fix
+
+**Bug:** Capital allocation to Trading, Crypto, Gambling, and Snooker incorrectly reduced Net Worth. When funding an activity account via transfer, the source bank balance decreased but the activity account was excluded from Net Worth (include_in_net_worth = false), causing a net reduction equal to the funded amount.
+
+**Root cause:** Activity capital accounts had include_in_net_worth = false. This was architecturally incorrect — these accounts hold real capital (actual money in real accounts like Groww), not excluded speculative positions.
+
+**Key architectural clarification confirmed during inspection:**
+- accounts.balance for Trading/Crypto/Gambling/Snooker = real account balance (manually updated by user)
+- Trade/crypto/gambling/snooker P&L = computed separately from trades/bets tables, display-only, never enters Net Worth formula
+- No double-counting risk exists — account balance and P&L are completely independent data sources
+
+**Fix:** Single SQL UPDATE — set include_in_net_worth = true for all four activity account types:
+```sql
+update public.accounts set include_in_net_worth = true
+where type in ('trading', 'crypto', 'gambling', 'snooker');
+```
+
+**No code changes required** beyond updating the Dashboard Net Worth subtitle label.
+
+**Accounting invariant verified (all 8 tests via simulation):**
+- Fund Trading ₹10,000 → NW unchanged ✅
+- Withdraw Trading ₹4,000 → NW unchanged ✅
+- Fund Crypto ₹10,000 → NW unchanged ✅
+- Fund Gambling ₹10,000 → NW unchanged ✅
+- Fund Snooker ₹10,000 → NW unchanged ✅
+- Activity loss ₹2,000 → NW decreases ₹2,000 ✅
+- Activity gain ₹2,000 → NW increases ₹2,000 ✅
+- Full lifecycle (fund + loss + withdraw) → NW = 48,000 ✅
+
+**Liquidity:** Unchanged — liquidity calculation still filters to bank + cash only.
+
+**Files modified:** index.html (subtitle label only), FCC_CHANGELOG.md
+**Database change:** UPDATE accounts SET include_in_net_worth = true WHERE type IN ('trading','crypto','gambling','snooker')
