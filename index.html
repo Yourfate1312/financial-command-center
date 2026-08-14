@@ -2678,42 +2678,28 @@
     const firstEmiDate = document.getElementById('emi-first-date').value;
     const notes = document.getElementById('emi-notes').value || null;
 
-    // Step 1: create the plan
-    const { data: plan, error: planError } = await sb.from('emi_plans').insert({
-      user_id: user.id, description, merchant, credit_card_account_id: cardId,
-      original_amount: originalAmount, conversion_date: conversionDate, tenure_months: tenure,
-      interest_rate: interestRate, monthly_emi: monthlyEmi, processing_fee: processingFee,
-      gst_rate: gstRate, first_emi_date: firstEmiDate, notes
-    }).select('id').single();
-    if (planError) { emiPlanError.textContent = planError.message; emiPlanError.style.display = 'block'; return; }
-
-    // Step 2: emi_conversion transaction - reduces card's revolving balance by the converted principal
-    const { data: convTxn, error: convError } = await sb.from('transactions').insert({
-      user_id: user.id, account_id: cardId, type: 'emi_conversion', category: 'EMI Conversion',
-      amount: originalAmount, txn_date: conversionDate, note: `EMI conversion: ${description}`
-    }).select('id').single();
-    if (convError) { emiPlanError.textContent = convError.message; emiPlanError.style.display = 'block'; return; }
-
-    // Step 3: processing fee (if any) - a real one-time expense against the card
-    let feeTxnId = null;
-    if (processingFee > 0) {
-      const feeGst = processingFee * (gstRate / 100);
-      const { data: feeTxn, error: feeError } = await sb.from('transactions').insert({
-        user_id: user.id, account_id: cardId, type: 'expense', category: 'EMI Processing Fee',
-        amount: processingFee + feeGst, txn_date: conversionDate, note: `Processing fee: ${description}`
-      }).select('id').single();
-      if (feeError) { emiPlanError.textContent = feeError.message; emiPlanError.style.display = 'block'; return; }
-      feeTxnId = feeTxn.id;
-    }
-
-    // Step 4: link both transactions back to the plan
-    await sb.from('emi_plans').update({ conversion_transaction_id: convTxn.id, processing_fee_transaction_id: feeTxnId }).eq('id', plan.id);
-
-    // Step 5: generate and insert the full schedule
+    // Generate schedule client-side (pure math, no DB calls)
     const schedule = generateEmiSchedule(originalAmount, monthlyEmi, interestRate, tenure, gstRate, firstEmiDate);
-    const scheduleRows = schedule.map(s => ({ ...s, emi_plan_id: plan.id }));
-    const { error: scheduleError } = await sb.from('emi_schedule').insert(scheduleRows);
-    if (scheduleError) { emiPlanError.textContent = scheduleError.message; emiPlanError.style.display = 'block'; return; }
+
+    // Single atomic RPC — all 5 steps succeed or nothing changes
+    const { data, error } = await sb.rpc('create_emi_plan', {
+      p_user_id: user.id,
+      p_description: description,
+      p_merchant: merchant,
+      p_card_id: cardId,
+      p_original_amount: originalAmount,
+      p_conversion_date: conversionDate,
+      p_tenure: tenure,
+      p_interest_rate: interestRate,
+      p_monthly_emi: monthlyEmi,
+      p_processing_fee: processingFee,
+      p_gst_rate: gstRate,
+      p_first_emi_date: firstEmiDate,
+      p_notes: notes,
+      p_schedule: JSON.stringify(schedule)
+    });
+
+    if (error) { emiPlanError.textContent = error.message; emiPlanError.style.display = 'block'; return; }
 
     emiPlanForm.reset();
     document.getElementById('emi-conversion-date').valueAsDate = new Date();
@@ -2785,6 +2771,7 @@
           <div class="txn-row-actions" style="margin-top:10px; justify-content:flex-start;">
             <button type="button" onclick="toggleEmiSchedule('${plan.id}')">View Schedule</button>
             ${nextInstallment ? `<button type="button" onclick="recordEmiPayment('${nextInstallment.id}', '${plan.id}')">Record Next Payment</button>` : ''}
+            ${plan.status === 'active' ? `<button type="button" onclick="foreclose_emi('${plan.id}')" style="border-color:var(--amber-dim); color:var(--amber);">Foreclose</button>` : ''}
             <button type="button" class="delete" onclick="deleteEmiPlan('${plan.id}')">Delete Plan</button>
           </div>
           <div id="emi-schedule-${plan.id}" style="display:none; margin-top:12px;"></div>
@@ -2816,10 +2803,18 @@
     if (el.style.display === 'block') { el.style.display = 'none'; return; }
 
     const { data: schedule } = await sb.from('emi_schedule').select('*').eq('emi_plan_id', planId).order('installment_number');
+    const today = new Date().toISOString().slice(0, 10);
     el.innerHTML = `
       <div style="border-top:1px solid var(--border); padding-top:10px;">
-        ${(schedule || []).map(s => `
-          <div class="txn-row" style="grid-template-columns: 40px 90px 100px 100px 90px 90px 70px 100px; font-size:10px;">
+        <div class="txn-row" style="grid-template-columns: 40px 90px 100px 100px 90px 90px 70px 100px; font-size:9px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px;">
+          <div>#</div><div>Due</div><div>Opening</div><div>EMI</div><div>Principal</div><div>Interest</div><div>GST</div><div>Status</div>
+        </div>
+        ${(schedule || []).map(s => {
+          const isOverdue = s.payment_status === 'pending' && s.due_date < today;
+          const statusColor = s.payment_status === 'paid' ? 'var(--green)' : s.payment_status === 'foreclosed' ? 'var(--amber)' : isOverdue ? 'var(--red)' : 'var(--text-dim)';
+          const statusLabel = isOverdue ? 'OVERDUE' : s.payment_status.toUpperCase();
+          return `
+          <div class="txn-row" style="grid-template-columns: 40px 90px 100px 100px 90px 90px 70px 100px; font-size:10px; ${isOverdue ? 'background:rgba(255,92,92,0.05);' : ''}">
             <div>#${s.installment_number}</div>
             <div class="txn-date">${s.due_date}</div>
             <div>${fmtINR(s.opening_principal)}</div>
@@ -2827,9 +2822,9 @@
             <div>${fmtINR(s.principal_component)}</div>
             <div>${fmtINR(s.interest_component)}</div>
             <div>${fmtINR(s.gst_component)}</div>
-            <div style="color:${s.payment_status === 'paid' ? 'var(--green)' : 'var(--text-dim)'};">${s.payment_status}</div>
+            <div style="color:${statusColor}; font-weight:700;">${statusLabel}</div>
           </div>
-        `).join('')}
+        `}).join('')}
       </div>
     `;
     el.style.display = 'block';
@@ -2846,40 +2841,54 @@
     const accIdx = parseInt(accIdxStr, 10) - 1;
     if (!accounts || accIdx < 0 || accIdx >= accounts.length) { alert('Invalid account selection.'); return; }
     const payingAccountId = accounts[accIdx].id;
-
-    const { data: { user } } = await sb.auth.getUser();
     const paidDate = new Date().toISOString().slice(0, 10);
 
-    // Principal - visible cash movement, excluded from expense analytics
-    const { data: principalTxn, error: pError } = await sb.from('transactions').insert({
-      user_id: user.id, account_id: payingAccountId, type: 'emi_principal', category: 'EMI Principal',
-      amount: row.principal_component, txn_date: paidDate, note: `EMI #${row.installment_number} principal`
-    }).select('id').single();
-    if (pError) { alert('Error: ' + pError.message); return; }
+    // Atomic RPC — principal + interest + schedule update + plan completion in one transaction
+    const { error } = await sb.rpc('record_emi_payment', {
+      p_schedule_id: scheduleId,
+      p_plan_id: planId,
+      p_paying_account_id: payingAccountId,
+      p_paid_date: paidDate
+    });
 
-    // Interest + GST - the only real expense
-    const interestGstAmount = Number(row.interest_component) + Number(row.gst_component);
-    let interestTxnId = null;
-    if (interestGstAmount > 0) {
-      const { data: interestTxn, error: iError } = await sb.from('transactions').insert({
-        user_id: user.id, account_id: payingAccountId, type: 'expense', category: 'EMI Interest & Charges',
-        amount: interestGstAmount, txn_date: paidDate, note: `EMI #${row.installment_number} interest + GST`
-      }).select('id').single();
-      if (iError) { alert('Error: ' + iError.message); return; }
-      interestTxnId = interestTxn.id;
-    }
+    if (error) { alert('Error recording payment: ' + error.message); return; }
 
-    await sb.from('emi_schedule').update({
-      payment_status: 'paid', paid_date: paidDate,
-      principal_transaction_id: principalTxn.id, interest_transaction_id: interestTxnId
-    }).eq('id', scheduleId);
+    await loadEmiPlans();
+    await loadAccounts();
+    await loadDashboard();
+  };
 
-    // Auto-complete the plan if this was the last pending installment
-    const { data: stillPending } = await sb.from('emi_schedule').select('id').eq('emi_plan_id', planId).eq('payment_status', 'pending');
-    if (!stillPending || stillPending.length === 0) {
-      await sb.from('emi_plans').update({ status: 'completed' }).eq('id', planId);
-    }
+  window.foreclose_emi = async function (planId) {
+    const { data: pending } = await sb.from('emi_schedule').select('principal_component').eq('emi_plan_id', planId).eq('payment_status', 'pending');
+    const outstandingPrincipal = (pending || []).reduce((s, r) => s + Number(r.principal_component), 0);
+    const foreclosureFee = outstandingPrincipal * 0.03;
+    const feeGst = foreclosureFee * 0.18;
+    const total = outstandingPrincipal + foreclosureFee + feeGst;
 
+    const { data: accounts } = await sb.from('accounts').select('id, name').neq('type', 'credit_card').order('created_at');
+    const accountNames = (accounts || []).map((a, i) => `${i + 1}. ${a.name}`).join('\n');
+
+    const msg = `FORECLOSURE SUMMARY\n\nOutstanding Principal: ${fmtINR(outstandingPrincipal)}\nForeclosure Fee (3%): ${fmtINR(foreclosureFee)}\nGST on Fee (18%): ${fmtINR(feeGst)}\nTotal to Pay: ${fmtINR(total)}\n\nPay from which account?\n${accountNames}\nEnter number:`;
+    const accIdxStr = prompt(msg);
+    if (accIdxStr === null) return;
+    const accIdx = parseInt(accIdxStr, 10) - 1;
+    if (!accounts || accIdx < 0 || accIdx >= accounts.length) { alert('Invalid account selection.'); return; }
+    const payingAccountId = accounts[accIdx].id;
+
+    if (!confirm(`Confirm foreclosure: pay ${fmtINR(total)} total from ${accounts[accIdx].name}. This cannot be undone.`)) return;
+
+    const foreclosureDate = new Date().toISOString().slice(0, 10);
+
+    // Atomic RPC — all steps succeed or nothing changes
+    const { data, error } = await sb.rpc('foreclose_emi_plan', {
+      p_plan_id: planId,
+      p_paying_account_id: payingAccountId,
+      p_foreclosure_date: foreclosureDate
+    });
+
+    if (error) { alert('Foreclosure error: ' + error.message); return; }
+
+    alert(`Foreclosure complete.\nPrincipal paid: ${fmtINR(data.outstanding_principal)}\nFee + GST: ${fmtINR(Number(data.foreclosure_fee) + Number(data.gst_on_fee))}\nTotal: ${fmtINR(data.total_foreclosure)}`);
     await loadEmiPlans();
     await loadAccounts();
     await loadDashboard();
