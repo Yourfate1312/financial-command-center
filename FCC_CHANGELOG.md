@@ -208,3 +208,32 @@ where type in ('trading', 'crypto', 'gambling', 'snooker');
 **Financial data modified:** None. No balances, transactions, or records were altered.
 
 **Tests:** All existing app operations verified to continue working (legitimate transactions still insert/update correctly since the with_check conditions are satisfied by all valid same-user operations). Cross-user attack vectors closed at the policy layer.
+
+## 2026-08-13 — EMI Engine Atomicity + Foreclosure (Blocks 1–4)
+
+**Problem fixed:** EMI plan creation was 5 sequential Supabase calls; payment was 3 calls. Any network failure between steps left the database in a partial state (plan without schedule, payment without schedule update, etc.).
+
+**Solution:** 3 Postgres RPC functions (SECURITY DEFINER, atomic):
+
+- `create_emi_plan()` — creates plan + emi_conversion transaction + processing fee transaction + links + full schedule in one DB transaction
+- `record_emi_payment()` — principal transaction + interest/GST transaction + schedule status update + plan auto-completion in one DB transaction  
+- `foreclose_emi_plan()` — outstanding principal transaction + foreclosure fee expense + marks pending installments 'foreclosed' + marks plan 'foreclosed' in one DB transaction
+
+**Foreclosure spec:** Outstanding principal + 3% fee + 18% GST on fee. Displays full breakdown before confirming. History preserved (installments marked 'foreclosed', not deleted).
+
+**Overdue display:** Schedule view now flags installments where payment_status='pending' AND due_date < today as OVERDUE in red. Paid = green, Foreclosed = amber, Pending = dim.
+
+**Foreclose button:** Added to active EMI plan cards only (not completed/foreclosed plans).
+
+**Analytics integrity confirmed:**
+- `emi_principal` type excluded from expense analytics (no catch-all in filter)
+- `emi_conversion` excluded from expense analytics
+- Only interest+GST booked as `expense` — the only real financing cost
+- Principal repayment never double-counted as personal expense
+
+**Math verified:** 6-installment ₹30,000 test — total principal = ₹30,000.01 (1 paisa rounding, acceptable), closing principal = 0, GST = 18% of interest only. Foreclosure fee = 3% of remaining principal + 18% GST on fee.
+
+**Security:** RPC functions verify account ownership (account must belong to plan's user_id) before inserting transactions. Respects Migration 023 RLS hardening.
+
+**Files modified:** index.html (EMI engine JS), FCC_CHANGELOG.md
+**Database additions:** 3 RPC functions (create_emi_plan, record_emi_payment, foreclose_emi_plan)
