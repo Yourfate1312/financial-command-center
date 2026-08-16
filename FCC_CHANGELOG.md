@@ -237,3 +237,40 @@ where type in ('trading', 'crypto', 'gambling', 'snooker');
 
 **Files modified:** index.html (EMI engine JS), FCC_CHANGELOG.md
 **Database additions:** 3 RPC functions (create_emi_plan, record_emi_payment, foreclose_emi_plan)
+
+## 2026-08-13 — Step 8: Transaction Engine Audit + EMI Net Worth Fix
+
+**Audit scope:** 16-test matrix across all transaction types, credit card, FD, transfers, capital allocation, investments, EMI.
+
+**Tests 1–12 result: ALL PASS — no bugs found in:**
+- Bank income/expense
+- CC purchase (expense increases owed) and payment via transfer (decreases owed)
+- Bank→Bank transfer (NW neutral, liq neutral)
+- Bank→Trading/Crypto/Gambling/Snooker capital (NW neutral, liq decreases)
+- Capital withdrawal to bank (NW neutral, liq increases)
+- Investment purchase (NW neutral, bank decreases, basis increases)
+- Investment sale (NW increases by realized gain only)
+
+**Bug found and fixed — EMI Net Worth:**
+
+Root cause: `emi_conversion` correctly moves principal off the CC revolving balance. But the EMI outstanding principal then became an off-balance-sheet liability — tracked in `emi_schedule` but not deducted from Net Worth. Result: each `emi_principal` payment reduced bank balance (decreasing NW) without a corresponding liability reduction, causing NW to drop by the full principal amount instead of only by interest+GST.
+
+Fix: Added `emiOutstandingTotal = sum(pending emi_schedule.principal_component)` to the Net Worth formula as a negative (liability). This makes the complete EMI lifecycle Net Worth-neutral on principal and only reduces NW by actual financing costs (interest + GST).
+
+**Verified lifecycle:**
+- Purchase: NW −30,000 (expense) ✅
+- Conversion: NW unchanged (CC liability replaced by EMI liability) ✅
+- Each payment: NW −442.50 (interest+GST only) ✅
+- Foreclosure: NW −708 (fee+GST only) ✅
+
+**Net Worth formula (final):**
+```
+accountsTotal (signed: CC negative)
++ debtorsTotal
+- creditorsTotal
++ investmentsTotal (lot cost basis - sold basis)
+- emiOutstandingTotal (pending emi_schedule principal)
+```
+
+**No trigger changes. No schema changes. No migration required.**
+**Files modified:** index.html (Dashboard Net Worth formula + subtitle label), FCC_CHANGELOG.md
