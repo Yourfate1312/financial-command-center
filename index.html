@@ -1464,9 +1464,17 @@
         </form>
 
         <div class="section-title">Data Backup</div>
-        <button type="button" class="btn-ghost" id="export-all-btn">Download Full Backup (JSON)</button>
-        <p style="font-size:11px; color:var(--text-dim); margin-top:10px;">
-          Exports all 16 tables: accounts, transactions, bets, trades, crypto_trades, loans, investments, investment_lots, investment_sales, emi_plans, emi_schedule, rewards, goals, documents, account_reconciliations, profiles. Keep this file somewhere safe — it is the only backup of your financial history.
+        <div id="backup-status" style="background:var(--panel-2); border:1px solid var(--border); padding:14px; margin-bottom:14px; font-size:12px;">
+          <div style="color:var(--text-dim);">Last backup: <span id="backup-last-time" style="color:var(--text);">Never</span></div>
+          <div style="color:var(--text-dim); margin-top:4px;">Status: <span id="backup-last-status" style="color:var(--text-dim);">—</span></div>
+        </div>
+        <button type="button" class="btn-primary" id="export-all-btn" style="width:auto; padding:11px 28px;">Export Full Backup (JSON)</button>
+        <div id="backup-progress" style="display:none; margin-top:10px; font-size:11px; color:var(--text-dim);"></div>
+        <div id="backup-result" style="display:none; margin-top:10px;"></div>
+        <p style="font-size:11px; color:var(--text-dim); margin-top:14px;">
+          Exports all 16 tables as a single JSON file downloaded to your device. The file is your only backup — store it in Google Drive, email it to yourself, or keep it in a safe folder. Financial data only; no passwords or API keys are included.<br><br>
+          <strong style="color:var(--amber);">Note on Documents table:</strong> Documents only stores names and links (e.g. Google Drive URLs). The actual files referenced are NOT downloaded — those remain wherever you stored them externally.<br><br>
+          <strong style="color:var(--amber);">Note on Authentication:</strong> Your login password is managed by Supabase Auth and is NOT included in this backup. If you lose access, you must recreate your account — your financial data can then be re-imported.
         </p>
       </div>
 
@@ -3590,19 +3598,119 @@
   });
 
   document.getElementById('export-all-btn').addEventListener('click', async () => {
-    const tables = [
-      'accounts', 'transactions', 'bets', 'trades', 'crypto_trades',
-      'loans', 'investments', 'investment_lots', 'investment_sales',
-      'emi_plans', 'emi_schedule', 'rewards', 'goals', 'documents',
-      'account_reconciliations', 'profiles'
+    const btn = document.getElementById('export-all-btn');
+    const progressEl = document.getElementById('backup-progress');
+    const resultEl = document.getElementById('backup-result');
+    btn.disabled = true;
+    btn.textContent = 'Exporting…';
+    progressEl.style.display = 'block';
+    resultEl.style.display = 'none';
+
+    const TABLES = [
+      'profiles', 'accounts', 'transactions', 'bets', 'trades', 'crypto_trades',
+      'investments', 'investment_lots', 'investment_sales', 'loans',
+      'emi_plans', 'emi_schedule', 'rewards', 'goals', 'documents', 'account_reconciliations'
     ];
-    const backup = {};
-    for (const t of tables) {
-      const { data } = await sb.from(t).select('*');
-      backup[t] = data || [];
+
+    const exportedAt = new Date().toISOString();
+    const backup = {
+      metadata: {
+        backup_version: '2.0',
+        schema_version: 'migration_023',
+        exported_at: exportedAt,
+        table_count: TABLES.length,
+        notes: [
+          'documents table contains metadata/links only — actual files are NOT backed up',
+          'auth.users credentials are NOT included — login must be recreated separately',
+          'Restore in dependency order: profiles → accounts → investments → investment_lots → investment_sales → transactions → loans → bets → trades → crypto_trades → emi_plans → emi_schedule → rewards → goals → documents → account_reconciliations'
+        ]
+      }
+    };
+
+    const errors = [];
+    let totalRecords = 0;
+
+    for (const table of TABLES) {
+      progressEl.textContent = `Exporting ${table}… (${TABLES.indexOf(table) + 1}/${TABLES.length})`;
+      const { data, error } = await sb.from(table).select('*');
+      if (error) {
+        errors.push(`${table}: ${error.message}`);
+        backup[table] = null; // explicitly mark as failed, not empty
+      } else {
+        backup[table] = data || [];
+        totalRecords += (data || []).length;
+      }
     }
-    downloadFile(JSON.stringify(backup, null, 2), `fcc-backup-${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
+
+    btn.disabled = false;
+    btn.textContent = 'Export Full Backup (JSON)';
+    progressEl.style.display = 'none';
+
+    if (errors.length > 0) {
+      // At least one table failed — mark as PARTIAL, do NOT pretend it's complete
+      const failedTables = errors.map(e => e.split(':')[0]);
+      backup.metadata.status = 'PARTIAL';
+      backup.metadata.failed_tables = failedTables;
+      backup.metadata.errors = errors;
+
+      resultEl.style.display = 'block';
+      resultEl.innerHTML = `
+        <div style="color:var(--red); background:rgba(255,92,92,0.08); border:1px solid var(--red); padding:12px; font-size:11px;">
+          ⚠ PARTIAL BACKUP — ${errors.length} table(s) failed:<br>
+          <strong>${failedTables.join(', ')}</strong><br><br>
+          ${errors.join('<br>')}
+          <br><br>The backup file has been marked PARTIAL and will be downloaded. Do NOT treat it as a complete backup.
+        </div>`;
+
+      // Still offer the partial download — clearly labelled
+      downloadFile(JSON.stringify(backup, null, 2), `fcc-backup-PARTIAL-${exportedAt.slice(0,10)}.json`, 'application/json');
+      document.getElementById('backup-last-time').textContent = new Date(exportedAt).toLocaleString('en-IN');
+      document.getElementById('backup-last-status').textContent = `⚠ PARTIAL — ${TABLES.length - errors.length}/${TABLES.length} tables`;
+      document.getElementById('backup-last-status').style.color = 'var(--red)';
+      return;
+    }
+
+    // All tables succeeded — validate
+    const coveredTables = TABLES.filter(t => Array.isArray(backup[t])).length;
+    const missingTables = TABLES.filter(t => !Array.isArray(backup[t]));
+
+    backup.metadata.status = 'COMPLETE';
+    backup.metadata.total_records = totalRecords;
+    backup.metadata.per_table = Object.fromEntries(TABLES.map(t => [t, (backup[t]||[]).length]));
+
+    // Validate critical tables explicitly
+    const criticalCheck = ['investment_lots', 'investment_sales', 'emi_plans', 'emi_schedule', 'transactions', 'accounts'];
+    const criticalReport = criticalCheck.map(t => `${t}: ${(backup[t]||[]).length} rows`).join(' | ');
+
+    // Download
+    downloadFile(JSON.stringify(backup, null, 2), `fcc-backup-${exportedAt.slice(0,10)}.json`, 'application/json');
+
+    // Update UI
+    const timeStr = new Date(exportedAt).toLocaleString('en-IN');
+    localStorage.setItem('fcc_last_backup', exportedAt);
+    document.getElementById('backup-last-time').textContent = timeStr;
+    document.getElementById('backup-last-status').textContent = `✓ COMPLETE — ${coveredTables}/${TABLES.length} tables · ${totalRecords} records`;
+    document.getElementById('backup-last-status').style.color = 'var(--green)';
+
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = `
+      <div style="color:var(--green); background:rgba(61,220,132,0.08); border:1px solid var(--green); padding:12px; font-size:11px;">
+        ✓ BACKUP COMPLETE<br>
+        ${coveredTables}/${TABLES.length} tables · ${totalRecords} total records<br>
+        ${timeStr}<br><br>
+        <span style="color:var(--text-dim);">Critical tables: ${criticalReport}</span>
+      </div>`;
   });
+
+  // Restore last backup timestamp from localStorage on settings page load
+  (function restoreBackupStatus() {
+    const last = localStorage.getItem('fcc_last_backup');
+    if (last) {
+      document.getElementById('backup-last-time').textContent = new Date(last).toLocaleString('en-IN');
+      document.getElementById('backup-last-status').textContent = 'See last downloaded file for details';
+      document.getElementById('backup-last-status').style.color = 'var(--text-dim)';
+    }
+  })();
 
   // ---------- RECONCILIATION ENGINE ----------
   // Mirrors the exact direction logic of the live database triggers (apply_transaction_to_balance
