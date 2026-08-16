@@ -274,3 +274,38 @@ accountsTotal (signed: CC negative)
 
 **No trigger changes. No schema changes. No migration required.**
 **Files modified:** index.html (Dashboard Net Worth formula + subtitle label), FCC_CHANGELOG.md
+
+## 2026-08-13 — Step 9: Complete Backup System
+
+**Previous coverage:** 16/16 tables (Step 3 already fixed the table list)
+**Remaining gaps fixed in this step:**
+- No error handling — table failure was silent, partial backup presented as complete
+- No metadata or schema version in the backup JSON
+- No validation summary shown to user
+- No last-backup timestamp in UI
+- No per-table record counts
+
+**New backup engine:**
+- Exports all 16 tables in dependency order
+- Each table error is caught individually — does NOT silently produce a partial backup
+- If any table fails: backup is labelled PARTIAL, failed tables listed, user warned
+- If all succeed: backup labelled COMPLETE with table count, record count, timestamp
+- Metadata block added to JSON: backup_version, schema_version, exported_at, per_table counts, restore order, notes
+- Critical table validation: investment_lots, investment_sales, emi_plans, emi_schedule, transactions, accounts explicitly reported
+- Last-backup timestamp stored in localStorage, displayed on Settings page
+- Download filename: `fcc-backup-YYYY-MM-DD.json` (or `fcc-backup-PARTIAL-...` if partial)
+
+**Tables covered (16/16):**
+profiles, accounts, transactions, bets, trades, crypto_trades, investments, investment_lots, investment_sales, loans, emi_plans, emi_schedule, rewards, goals, documents, account_reconciliations
+
+**Documented limitations (in UI and backup metadata):**
+- documents table: links/metadata only — actual external files NOT backed up
+- auth.users: password/credentials NOT included — must be recreated separately
+- No automation: manual click required; browser cannot guarantee background execution
+- No encryption: JSON file contains all financial data in plaintext — store securely
+- Restore: not implemented as a UI feature — restore manually via Supabase SQL Editor in dependency order
+
+**Security:** RLS enforced — user can only export their own data. No service-role key, no passwords, no API secrets in backup.
+
+**Files modified:** index.html (Settings backup section), FCC_CHANGELOG.md
+**Database changes:** None
