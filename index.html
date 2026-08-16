@@ -476,7 +476,7 @@
           <div class="summary-cell">
             <div class="label">Net Worth</div>
             <div class="value amber" id="dash-net-worth">—</div>
-            <div class="sub">Banks + Cash + Activity Capitals + Investments + Debtors − Creditors − CC</div>
+            <div class="sub">Banks + Cash + Activity Capitals + Investments + Debtors − Creditors − CC − EMI Outstanding</div>
           </div>
           <div class="summary-cell">
             <div class="label">This Month Income</div>
@@ -3783,13 +3783,17 @@
     const { data: loans } = await sb.from('loans').select('type, balance').eq('is_closed', false);
     const { data: allLots } = await sb.from('investment_lots').select('quantity, price_per_unit');
     const { data: allSales } = await sb.from('investment_sales').select('cost_basis_removed');
+    const { data: emiPending } = await sb.from('emi_schedule').select('principal_component').eq('payment_status', 'pending');
     const accountsTotal = (accounts || []).reduce((s, a) => s + signedAccountBalance(a), 0);
     const debtorsTotal = (loans || []).filter(l => l.type === 'debtor').reduce((s, l) => s + Number(l.balance), 0);
     const creditorsTotal = (loans || []).filter(l => l.type === 'creditor').reduce((s, l) => s + Number(l.balance), 0);
     const lotBoughtTotal = (allLots || []).reduce((s, l) => s + Number(l.quantity) * Number(l.price_per_unit), 0);
     const lotSoldCostTotal = (allSales || []).reduce((s, sale) => s + Number(sale.cost_basis_removed), 0);
     const investmentsTotal = lotBoughtTotal - lotSoldCostTotal;
-    const netWorth = accountsTotal + debtorsTotal - creditorsTotal + investmentsTotal;
+    // EMI outstanding principal is a real liability — excluded from CC balance after conversion
+    // Must be subtracted from Net Worth to avoid understating liabilities
+    const emiOutstandingTotal = (emiPending || []).reduce((s, r) => s + Number(r.principal_component), 0);
+    const netWorth = accountsTotal + debtorsTotal - creditorsTotal + investmentsTotal - emiOutstandingTotal;
 
     document.getElementById('dash-net-worth').textContent = fmtINR(netWorth);
     document.getElementById('dash-debtors').textContent = fmtINR(debtorsTotal);
