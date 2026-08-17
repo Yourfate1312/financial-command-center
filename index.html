@@ -472,11 +472,18 @@
 
     <div class="main">
       <div id="page-dashboard" class="page">
+
+        <!-- LAYER 1: KEY NUMBERS ROW -->
         <div class="summary-row">
           <div class="summary-cell">
             <div class="label">Net Worth</div>
             <div class="value amber" id="dash-net-worth">—</div>
             <div class="sub">Banks + Cash + Activity Capitals + Investments + Debtors − Creditors − CC − EMI Outstanding</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Liquidity</div>
+            <div class="value" id="dash-liquidity" style="color:var(--green);">—</div>
+            <div class="sub">Bank + Cash only</div>
           </div>
           <div class="summary-cell">
             <div class="label">This Month Income</div>
@@ -488,35 +495,111 @@
             <div class="value" id="dash-expense" style="color: var(--red);">—</div>
             <div class="sub" id="dash-expense-sub">—</div>
           </div>
+          <div class="summary-cell">
+            <div class="label">Net Cash Flow</div>
+            <div class="value" id="dash-cashflow">—</div>
+            <div class="sub">Income − Expenses (personal only)</div>
+          </div>
         </div>
 
+        <!-- FINANCIAL INSIGHTS -->
+        <div class="section-title">Financial Insights</div>
+        <div id="dash-insights"></div>
+
+        <!-- LAYER 2: CAPITAL ALLOCATION -->
+        <div class="section-title">Capital Allocation</div>
+        <div class="summary-row" id="dash-capital-row">
+          <div class="summary-cell">
+            <div class="label">Trading</div>
+            <div class="value" id="dash-cap-trading">—</div>
+            <div class="sub" id="dash-cap-trading-sub">—</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Crypto</div>
+            <div class="value" id="dash-cap-crypto">—</div>
+            <div class="sub" id="dash-cap-crypto-sub">—</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Gambling</div>
+            <div class="value" id="dash-cap-gambling">—</div>
+            <div class="sub" id="dash-cap-gambling-sub">—</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Snooker</div>
+            <div class="value" id="dash-cap-snooker">—</div>
+            <div class="sub" id="dash-cap-snooker-sub">—</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Investments (Cost)</div>
+            <div class="value" id="dash-cap-investments">—</div>
+            <div class="sub" id="dash-cap-investments-sub">—</div>
+          </div>
+        </div>
+
+        <!-- LAYER 3: ACTIVITY PERFORMANCE -->
+        <div class="section-title">Activity Performance (All-time P&L)</div>
+        <div class="summary-row">
+          <div class="summary-cell">
+            <div class="label">Trading P&L</div>
+            <div class="value" id="dash-trading-pl">—</div>
+            <div class="sub">Closed trades only</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Crypto P&L</div>
+            <div class="value" id="dash-crypto-pl">—</div>
+            <div class="sub">Closed trades only</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Gambling P&L</div>
+            <div class="value" id="dash-gambling-pl">—</div>
+            <div class="sub">Settled bets only</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Snooker P&L</div>
+            <div class="value" id="dash-snooker-pl">—</div>
+            <div class="sub">Settled bets only</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Investment P&L</div>
+            <div class="value" id="dash-inv-pl">—</div>
+            <div class="sub">Realized gains/losses</div>
+          </div>
+        </div>
+
+        <!-- LIABILITIES -->
+        <div class="section-title">Liabilities</div>
+        <div class="summary-row">
+          <div class="summary-cell">
+            <div class="label">Credit Card Owed</div>
+            <div class="value" id="dash-cc-owed" style="color:var(--red);">—</div>
+            <div class="sub">From CC accounts</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">EMI Outstanding</div>
+            <div class="value" id="dash-emi-outstanding" style="color:var(--red);">—</div>
+            <div class="sub">Pending principal</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Creditors (You Owe)</div>
+            <div class="value" id="dash-creditors" style="color: var(--red);">—</div>
+            <div class="sub">Informal loans</div>
+          </div>
+          <div class="summary-cell">
+            <div class="label">Debtors (Owed To You)</div>
+            <div class="value" id="dash-debtors" style="color: var(--green);">—</div>
+            <div class="sub">Informal receivables</div>
+          </div>
+        </div>
+
+        <!-- PERSONAL MONTHLY TREND -->
+        <div class="section-title">6-Month Personal Cash Flow</div>
+        <div id="dash-monthly-trend"></div>
+
+        <!-- TOP EXPENSE CATEGORIES -->
         <div class="section-title">Top Expense Categories (This Month)</div>
         <div id="dash-top-categories"><div class="loading-state">Loading…</div></div>
 
-        <div class="section-title">Quick Pulse</div>
-        <div class="account-grid">
-          <div class="account-card">
-            <div class="type-badge">gambling</div>
-            <div class="name">Betting P/L (All-time)</div>
-            <div class="balance" id="dash-gambling-pl">—</div>
-          </div>
-          <div class="account-card">
-            <div class="type-badge">trading</div>
-            <div class="name">Trading P/L (All-time)</div>
-            <div class="balance" id="dash-trading-pl">—</div>
-          </div>
-          <div class="account-card">
-            <div class="type-badge">debtors</div>
-            <div class="name">Owed To You</div>
-            <div class="balance" id="dash-debtors" style="color: var(--green);">—</div>
-          </div>
-          <div class="account-card">
-            <div class="type-badge">creditors</div>
-            <div class="name">You Owe</div>
-            <div class="balance" id="dash-creditors" style="color: var(--red);">—</div>
-          </div>
-        </div>
-
+        <!-- RECENT ACTIVITY -->
         <div class="section-title">Recent Activity</div>
         <div id="dash-recent"><div class="loading-state">Loading…</div></div>
       </div>
@@ -3886,85 +3969,225 @@
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
 
-    // Net worth (reuse same logic as accounts)
-    const { data: accounts } = await sb.from('accounts').select('*').eq('include_in_net_worth', true);
-    const { data: loans } = await sb.from('loans').select('type, balance').eq('is_closed', false);
-    const { data: allLots } = await sb.from('investment_lots').select('quantity, price_per_unit');
-    const { data: allSales } = await sb.from('investment_sales').select('cost_basis_removed');
-    const { data: emiPending } = await sb.from('emi_schedule').select('principal_component').eq('payment_status', 'pending');
-    const accountsTotal = (accounts || []).reduce((s, a) => s + signedAccountBalance(a), 0);
+    // ── FETCH ALL DATA (single pass, no duplicate queries) ──────────────────
+    const [
+      { data: allAccounts },
+      { data: loans },
+      { data: allLots },
+      { data: allSalesData },
+      { data: emiPending },
+      { data: allTxns },
+      { data: bets },
+      { data: trades },
+      { data: cryptoTrades }
+    ] = await Promise.all([
+      sb.from('accounts').select('*'),
+      sb.from('loans').select('type, balance').eq('is_closed', false),
+      sb.from('investment_lots').select('quantity, price_per_unit'),
+      sb.from('investment_sales').select('cost_basis_removed, realized_pl'),
+      sb.from('emi_schedule').select('principal_component, interest_component, gst_component').eq('payment_status', 'pending'),
+      sb.from('transactions').select('*, accounts!transactions_account_id_fkey(name), to_account:accounts!transactions_to_account_id_fkey(name)').order('txn_date', { ascending: false }).order('created_at', { ascending: false }),
+      sb.from('bets').select('*'),
+      sb.from('trades').select('*'),
+      sb.from('crypto_trades').select('*')
+    ]);
+
+    const accounts = allAccounts || [];
+    const txns = allTxns || [];
+
+    // ── LAYER 1: NET WORTH ───────────────────────────────────────────────────
+    const nwAccounts = accounts.filter(a => a.include_in_net_worth);
+    const accountsTotal = nwAccounts.reduce((s, a) => s + signedAccountBalance(a), 0);
     const debtorsTotal = (loans || []).filter(l => l.type === 'debtor').reduce((s, l) => s + Number(l.balance), 0);
     const creditorsTotal = (loans || []).filter(l => l.type === 'creditor').reduce((s, l) => s + Number(l.balance), 0);
     const lotBoughtTotal = (allLots || []).reduce((s, l) => s + Number(l.quantity) * Number(l.price_per_unit), 0);
-    const lotSoldCostTotal = (allSales || []).reduce((s, sale) => s + Number(sale.cost_basis_removed), 0);
+    const lotSoldCostTotal = (allSalesData || []).reduce((s, sale) => s + Number(sale.cost_basis_removed), 0);
     const investmentsTotal = lotBoughtTotal - lotSoldCostTotal;
-    // EMI outstanding principal is a real liability — excluded from CC balance after conversion
-    // Must be subtracted from Net Worth to avoid understating liabilities
     const emiOutstandingTotal = (emiPending || []).reduce((s, r) => s + Number(r.principal_component), 0);
     const netWorth = accountsTotal + debtorsTotal - creditorsTotal + investmentsTotal - emiOutstandingTotal;
 
+    // LIQUIDITY: bank + cash only
+    const liquidity = accounts.filter(a => a.type === 'bank' || a.type === 'cash').reduce((s, a) => s + Number(a.balance), 0);
+
+    // ── LAYER 1: PERSONAL INCOME / EXPENSES (this month) ─────────────────────
+    // Strictly income and expense types only — transfers, investment_buy/sell,
+    // emi_conversion, emi_principal are all excluded by the type filter
+    const monthTxns = txns.filter(t => t.txn_date >= monthStart && t.txn_date <= monthEnd);
+    const monthIncome = monthTxns.filter(t => t.type === 'income');
+    const monthExpenses = monthTxns.filter(t => t.type === 'expense');
+    const incomeTotal = monthIncome.reduce((s, t) => s + Number(t.amount), 0);
+    const expenseTotal = monthExpenses.reduce((s, t) => s + Number(t.amount), 0);
+    const cashFlow = incomeTotal - expenseTotal;
+
+    // Previous month for trend comparison
+    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
+    const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
+    const prevTxns = txns.filter(t => t.txn_date >= prevMonthStart && t.txn_date <= prevMonthEnd);
+    const prevExpenseTotal = prevTxns.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+    const prevIncomeTotal = prevTxns.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
+
+    // ── LAYER 2: CAPITAL ALLOCATION ──────────────────────────────────────────
+    async function getCapitalFlow(accountType) {
+      const typeAccounts = accounts.filter(a => a.type === accountType);
+      const ids = typeAccounts.map(a => a.id);
+      const balance = typeAccounts.reduce((s, a) => s + Number(a.balance), 0);
+      if (ids.length === 0) return { funded: 0, withdrawn: 0, balance };
+      const funded = txns.filter(t => t.type === 'transfer' && ids.includes(t.to_account_id)).reduce((s, t) => s + Number(t.amount), 0);
+      const withdrawn = txns.filter(t => t.type === 'transfer' && ids.includes(t.account_id) && !ids.includes(t.to_account_id || '')).reduce((s, t) => s + Number(t.amount), 0);
+      return { funded, withdrawn, balance };
+    }
+    const [capTrading, capCrypto, capGambling, capSnooker] = await Promise.all([
+      getCapitalFlow('trading'), getCapitalFlow('crypto'), getCapitalFlow('gambling'), getCapitalFlow('snooker')
+    ]);
+
+    // ── LAYER 3: ACTIVITY P&L ────────────────────────────────────────────────
+    const tradePLTotal = (trades || []).reduce((s, t) => s + tradePL(t), 0);
+    const cryptoPLTotal = (cryptoTrades || []).reduce((s, t) => s + cryptoTradePL(t), 0);
+    const settledBets = (bets || []).filter(b => b.outcome !== 'pending');
+    const snookerBets = settledBets.filter(b => b.sport === 'Snooker (Bets)');
+    const otherBets = settledBets.filter(b => b.sport !== 'Snooker (Bets)');
+    const gamblingPL = otherBets.reduce((s, b) => s + betPayout(b), 0) - otherBets.reduce((s, b) => s + Number(b.stake), 0);
+    const snookerPL = snookerBets.reduce((s, b) => s + betPayout(b), 0) - snookerBets.reduce((s, b) => s + Number(b.stake), 0);
+    const invPL = (allSalesData || []).reduce((s, sale) => s + Number(sale.realized_pl), 0);
+
+    // ── LIABILITIES ──────────────────────────────────────────────────────────
+    const ccOwed = accounts.filter(a => a.type === 'credit_card').reduce((s, a) => s + Number(a.balance), 0);
+    const emiInterestRemaining = (emiPending || []).reduce((s, r) => s + Number(r.interest_component) + Number(r.gst_component), 0);
+
+    // ── RENDER ───────────────────────────────────────────────────────────────
+    function setVal(id, val, positive) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const isPos = val >= 0;
+      el.textContent = (isPos ? '+' : '') + fmtINR(val);
+      el.style.color = (positive ? isPos : !isPos) ? 'var(--green)' : 'var(--red)';
+    }
+    function setFmt(id, val) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = fmtINR(val);
+    }
+
     document.getElementById('dash-net-worth').textContent = fmtINR(netWorth);
-    document.getElementById('dash-debtors').textContent = fmtINR(debtorsTotal);
-    document.getElementById('dash-creditors').textContent = fmtINR(creditorsTotal);
-
-    // This month's transactions
-    const { data: monthTxns } = await sb
-      .from('transactions')
-      .select('*')
-      .gte('txn_date', monthStart)
-      .lte('txn_date', monthEnd);
-
-    const income = (monthTxns || []).filter(t => t.type === 'income');
-    const expenses = (monthTxns || []).filter(t => t.type === 'expense');
-    const incomeTotal = income.reduce((s, t) => s + Number(t.amount), 0);
-    const expenseTotal = expenses.reduce((s, t) => s + Number(t.amount), 0);
-
+    document.getElementById('dash-liquidity').textContent = fmtINR(liquidity);
     document.getElementById('dash-income').textContent = fmtINR(incomeTotal);
-    document.getElementById('dash-income-sub').textContent = `${income.length} entries`;
+    document.getElementById('dash-income-sub').textContent = `${monthIncome.length} entries`;
     document.getElementById('dash-expense').textContent = fmtINR(expenseTotal);
-    document.getElementById('dash-expense-sub').textContent = `${expenses.length} entries`;
+    document.getElementById('dash-expense-sub').textContent = `${monthExpenses.length} entries`;
 
-    // Top expense categories this month
+    const cfEl = document.getElementById('dash-cashflow');
+    cfEl.textContent = (cashFlow >= 0 ? '+' : '') + fmtINR(cashFlow);
+    cfEl.style.color = cashFlow >= 0 ? 'var(--green)' : 'var(--red)';
+
+    // Capital allocation
+    const capTypes = [
+      ['trading', capTrading], ['crypto', capCrypto], ['gambling', capGambling], ['snooker', capSnooker]
+    ];
+    capTypes.forEach(([type, cap]) => {
+      setFmt(`dash-cap-${type}`, cap.balance);
+      const subEl = document.getElementById(`dash-cap-${type}-sub`);
+      if (subEl) subEl.textContent = `Funded ${fmtINR(cap.funded)} · Withdrawn ${fmtINR(cap.withdrawn)}`;
+    });
+    setFmt('dash-cap-investments', investmentsTotal);
+    const invSubEl = document.getElementById('dash-cap-investments-sub');
+    if (invSubEl) invSubEl.textContent = `${(allLots || []).length} lots held`;
+
+    // Activity P&L
+    setVal('dash-trading-pl', tradePLTotal, true);
+    setVal('dash-crypto-pl', cryptoPLTotal, true);
+    setVal('dash-gambling-pl', gamblingPL, true);
+    setVal('dash-snooker-pl', snookerPL, true);
+    setVal('dash-inv-pl', invPL, true);
+
+    // Liabilities
+    setFmt('dash-cc-owed', ccOwed);
+    setFmt('dash-emi-outstanding', emiOutstandingTotal);
+    setFmt('dash-debtors', debtorsTotal);
+    setFmt('dash-creditors', creditorsTotal);
+
+    // ── 6-MONTH TREND CHART ──────────────────────────────────────────────────
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({
+        key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+        label: d.toLocaleString('default', { month: 'short' })
+      });
+    }
+    const monthData = months.map(m => {
+      const inc = txns.filter(t => t.type === 'income' && t.txn_date.startsWith(m.key)).reduce((s, t) => s + Number(t.amount), 0);
+      const exp = txns.filter(t => t.type === 'expense' && t.txn_date.startsWith(m.key)).reduce((s, t) => s + Number(t.amount), 0);
+      return { ...m, inc, exp, net: inc - exp };
+    });
+    const maxVal = Math.max(...monthData.map(m => Math.max(m.inc, m.exp)), 1);
+    const trendEl = document.getElementById('dash-monthly-trend');
+    if (trendEl) {
+      trendEl.innerHTML = `
+        <div style="background:var(--panel); border:1px solid var(--border); padding:16px;">
+          <div style="display:flex; gap:12px; align-items:flex-end; height:140px; margin-bottom:8px;">
+            ${monthData.map(m => `
+              <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:2px;">
+                <div style="display:flex; gap:2px; align-items:flex-end; height:110px;">
+                  <div style="width:14px; background:var(--green); opacity:0.8; height:${Math.max(2,(m.inc/maxVal*100)).toFixed(0)}%;" title="Income ${fmtINR(m.inc)}"></div>
+                  <div style="width:14px; background:var(--red); opacity:0.8; height:${Math.max(2,(m.exp/maxVal*100)).toFixed(0)}%;" title="Expense ${fmtINR(m.exp)}"></div>
+                </div>
+                <div style="font-size:10px; color:var(--text-dim);">${m.label}</div>
+                <div style="font-size:9px; color:${m.net>=0?'var(--green)':'var(--red)'};">${m.net>=0?'+':''}${fmtINR(m.net)}</div>
+              </div>
+            `).join('')}
+          </div>
+          <div style="font-size:10px; color:var(--text-dim);">
+            <span style="color:var(--green);">■</span> Income &nbsp;
+            <span style="color:var(--red);">■</span> Expense &nbsp;
+            Net Cash Flow shown below each month
+          </div>
+        </div>`;
+    }
+
+    // ── TOP EXPENSE CATEGORIES ────────────────────────────────────────────────
     const catTotals = {};
-    expenses.forEach(t => { catTotals[t.category] = (catTotals[t.category] || 0) + Number(t.amount); });
+    monthExpenses.forEach(t => { catTotals[t.category] = (catTotals[t.category] || 0) + Number(t.amount); });
     const topCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]).slice(0, 6);
+    const catMax = topCats.length ? topCats[0][1] : 1;
     const catEl = document.getElementById('dash-top-categories');
     catEl.innerHTML = topCats.length
       ? topCats.map(([cat, amt]) => `
-          <div class="txn-row" style="grid-template-columns: 1fr auto;">
-            <div class="txn-cat">${cat}</div>
-            <div class="txn-amount expense">${fmtINR(amt)}</div>
-          </div>
-        `).join('')
+          <div style="margin-bottom:8px;">
+            <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:3px;">
+              <span>${cat}</span>
+              <span style="color:var(--red);">${fmtINR(amt)} (${(amt/expenseTotal*100).toFixed(0)}%)</span>
+            </div>
+            <div style="background:var(--bg); border:1px solid var(--border); height:5px;">
+              <div style="background:var(--amber); height:100%; width:${(amt/catMax*100).toFixed(0)}%;"></div>
+            </div>
+          </div>`).join('')
       : `<div class="empty-state">No expenses logged this month yet.</div>`;
 
-    // Gambling pulse (all-time)
-    const { data: bets } = await sb.from('bets').select('*');
-    const settledBets = (bets || []).filter(b => b.outcome !== 'pending');
-    const betStaked = settledBets.reduce((s, b) => s + Number(b.stake), 0);
-    const betReturned = settledBets.reduce((s, b) => s + betPayout(b), 0);
-    const betPL = betReturned - betStaked;
-    const glEl = document.getElementById('dash-gambling-pl');
-    glEl.textContent = (betPL >= 0 ? '+' : '') + fmtINR(betPL);
-    glEl.style.color = betPL >= 0 ? 'var(--green)' : 'var(--red)';
+    // ── RULE-BASED INSIGHTS ───────────────────────────────────────────────────
+    const insights = [];
+    if (cashFlow < 0) insights.push({ color: 'var(--red)', text: `Spending exceeded income by ${fmtINR(Math.abs(cashFlow))} this month.` });
+    if (cashFlow > 0) insights.push({ color: 'var(--green)', text: `You saved ${fmtINR(cashFlow)} this month (${incomeTotal > 0 ? (cashFlow/incomeTotal*100).toFixed(0) : 0}% of income).` });
+    if (prevExpenseTotal > 0 && expenseTotal > prevExpenseTotal * 1.25) insights.push({ color: 'var(--red)', text: `Expenses are ${((expenseTotal/prevExpenseTotal-1)*100).toFixed(0)}% higher than last month.` });
+    if (prevExpenseTotal > 0 && expenseTotal < prevExpenseTotal * 0.75) insights.push({ color: 'var(--green)', text: `Expenses are ${((1-expenseTotal/prevExpenseTotal)*100).toFixed(0)}% lower than last month.` });
+    if (topCats.length) insights.push({ color: 'var(--text-dim)', text: `Largest expense category this month: ${topCats[0][0]} (${fmtINR(topCats[0][1])}).` });
+    if (emiOutstandingTotal > 0) insights.push({ color: 'var(--text-dim)', text: `EMI liability outstanding: ${fmtINR(emiOutstandingTotal)} · Remaining interest + GST: ${fmtINR(emiInterestRemaining)}.` });
+    if (debtorsTotal > creditorsTotal) insights.push({ color: 'var(--green)', text: `You are owed more than you owe: net receivable ${fmtINR(debtorsTotal - creditorsTotal)}.` });
+    if (creditorsTotal > debtorsTotal) insights.push({ color: 'var(--amber)', text: `You owe more than you are owed: net payable ${fmtINR(creditorsTotal - debtorsTotal)}.` });
+    if (liquidity < expenseTotal * 3 && expenseTotal > 0) insights.push({ color: 'var(--amber)', text: `Liquidity covers less than 3 months of current spending.` });
+    const totalActivityPL = tradePLTotal + cryptoPLTotal + gamblingPL + snookerPL + invPL;
+    if (totalActivityPL < 0) insights.push({ color: 'var(--red)', text: `Total activity P&L is negative: ${fmtINR(totalActivityPL)} all-time.` });
+    if (totalActivityPL > 0) insights.push({ color: 'var(--green)', text: `Total activity P&L is positive: ${fmtINR(totalActivityPL)} all-time.` });
 
-    // Trading pulse (all-time)
-    const { data: trades } = await sb.from('trades').select('*');
-    const tradePLTotal = (trades || []).reduce((s, t) => s + tradePL(t), 0);
-    const tpEl = document.getElementById('dash-trading-pl');
-    tpEl.textContent = (tradePLTotal >= 0 ? '+' : '') + fmtINR(tradePLTotal);
-    tpEl.style.color = tradePLTotal >= 0 ? 'var(--green)' : 'var(--red)';
+    const insightsEl = document.getElementById('dash-insights');
+    insightsEl.innerHTML = insights.length
+      ? `<div style="display:flex; flex-direction:column; gap:6px; margin-bottom:4px;">
+          ${insights.map(i => `<div style="font-size:12px; color:${i.color}; padding:8px 12px; background:var(--panel); border:1px solid var(--border);">▸ ${i.text}</div>`).join('')}
+        </div>`
+      : `<div class="empty-state">No insights yet — add some transactions first.</div>`;
 
-    // Recent activity: last 8 transactions across the board
-    const { data: recentTxns } = await sb
-      .from('transactions')
-      .select('*, accounts!transactions_account_id_fkey(name), to_account:accounts!transactions_to_account_id_fkey(name)')
-      .order('txn_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(8);
-
+    // ── RECENT ACTIVITY ───────────────────────────────────────────────────────
+    const recentTxns = txns.slice(0, 8);
     const recentEl = document.getElementById('dash-recent');
-    recentEl.innerHTML = (recentTxns && recentTxns.length)
+    recentEl.innerHTML = recentTxns.length
       ? recentTxns.map(t => {
           const isTransfer = t.type === 'transfer';
           const isInvestment = t.type === 'investment_buy' || t.type === 'investment_sell';
@@ -3979,18 +4202,15 @@
           return `
           <div class="txn-row">
             <div class="txn-date">${t.txn_date}</div>
-            <div>
-              <span class="txn-cat">${catLabel}</span>
-              ${t.note ? `<span class="txn-note">${t.note}</span>` : ''}
-            </div>
+            <div><span class="txn-cat">${catLabel}</span>${t.note ? `<span class="txn-note">${t.note}</span>` : ''}</div>
             <div class="txn-account">${accountLabel}</div>
             <div class="txn-amount ${amountClass}" style="${isNeutral ? 'color:var(--text-dim);' : ''}">${amountPrefix}${fmtINR(t.amount)}</div>
             <div></div>
-          </div>
-        `;
+          </div>`;
         }).join('')
       : `<div class="empty-state">No transactions yet.</div>`;
   }
+
 
   // ---------- SNOOKER PERFORMANCE ----------
   // Reads from bets table filtered to sport = 'Snooker (Bets)'.
