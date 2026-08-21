@@ -309,3 +309,36 @@ profiles, accounts, transactions, bets, trades, crypto_trades, investments, inve
 
 **Files modified:** index.html (Settings backup section), FCC_CHANGELOG.md
 **Database changes:** None
+
+## 2026-08-13 — Step 10: Analytics & Financial Intelligence
+
+**Dashboard rebuilt with 3-layer architecture:**
+- Layer 1: Net Worth, Liquidity, Monthly Income, Monthly Expenses, Net Cash Flow
+- Layer 2: Capital Allocation (Trading/Crypto/Gambling/Snooker/Investments) with funded/withdrawn sub-labels
+- Layer 3: Activity P&L (Trading/Crypto/Gambling/Snooker/Investments — all-time, separate from personal)
+- Liabilities section: CC Owed, EMI Outstanding, Creditors, Debtors
+- 6-month personal cash flow bar chart
+- Top expense categories with % of total
+- Rule-based financial insights (10 rules)
+- Recent activity (last 8 transactions)
+
+**Analytics page expanded:**
+- Period filter: This Month / Last 3M / Last 6M / This Year / All Time
+- Personal cash flow summary with savings rate
+- Expense categories with % breakdown
+- Income categories with % breakdown
+- Liability snapshot (CC, EMI, interest remaining, creditors)
+- Investment summary (per-holding cost basis + realized P&L)
+
+**Double-count tests (all pass):**
+- Transfers excluded from income/expense ✅
+- investment_buy/sell excluded ✅
+- emi_principal excluded ✅
+- emi_conversion excluded ✅
+- EMI interest+GST correctly included as expense ✅
+- Activity P&L separate from personal income ✅
+
+**Performance:** Dashboard now uses a single Promise.all() for 9 parallel queries instead of sequential calls. Analytics page fetches only what it needs per period.
+
+**Files modified:** index.html, FCC_CHANGELOG.md
+**Database changes:** None
