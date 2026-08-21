@@ -1461,10 +1461,47 @@
       </div>
 
       <div id="page-analytics" class="page" style="display:none;">
-        <div class="section-title">Income vs Expense (Last 6 Months)</div>
+
+        <div class="txn-form" style="margin-bottom:20px;">
+          <div class="field" style="max-width:200px;">
+            <label for="analytics-period">Period</label>
+            <select id="analytics-period" onchange="loadAnalytics()">
+              <option value="1">This Month</option>
+              <option value="3">Last 3 Months</option>
+              <option value="6" selected>Last 6 Months</option>
+              <option value="12">This Year</option>
+              <option value="0">All Time</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="section-title">Personal Cash Flow</div>
+        <div class="summary-row" id="analytics-summary">
+          <div class="summary-cell"><div class="label">Income</div><div class="value" id="an-income" style="color:var(--green);">—</div></div>
+          <div class="summary-cell"><div class="label">Expenses</div><div class="value" id="an-expense" style="color:var(--red);">—</div></div>
+          <div class="summary-cell"><div class="label">Net Cash Flow</div><div class="value" id="an-net">—</div></div>
+          <div class="summary-cell"><div class="label">Savings Rate</div><div class="value" id="an-savings-rate">—</div></div>
+        </div>
+
+        <div class="section-title">Income vs Expense (6-Month Bars)</div>
         <div id="analytics-trend"><div class="loading-state">Loading…</div></div>
-        <div class="section-title">Expense Breakdown by Category (All Time)</div>
+
+        <div class="section-title">Expense by Category</div>
         <div id="analytics-categories"><div class="loading-state">Loading…</div></div>
+
+        <div class="section-title">Income by Category</div>
+        <div id="analytics-income-cats"><div class="loading-state">Loading…</div></div>
+
+        <div class="section-title">Liability Overview</div>
+        <div class="summary-row" id="analytics-liabilities">
+          <div class="summary-cell"><div class="label">CC Owed</div><div class="value" id="an-cc-owed" style="color:var(--red);">—</div></div>
+          <div class="summary-cell"><div class="label">EMI Outstanding</div><div class="value" id="an-emi-out" style="color:var(--red);">—</div></div>
+          <div class="summary-cell"><div class="label">EMI Interest + GST Remaining</div><div class="value" id="an-emi-interest" style="color:var(--red);">—</div></div>
+          <div class="summary-cell"><div class="label">Creditors</div><div class="value" id="an-creditors" style="color:var(--red);">—</div></div>
+        </div>
+
+        <div class="section-title">Investment Summary (Cost Basis)</div>
+        <div id="analytics-investments"><div class="loading-state">Loading…</div></div>
       </div>
 
       <div id="page-reports" class="page" style="display:none;">
@@ -3429,63 +3466,140 @@
   // ---------- ANALYTICS ----------
 
   async function loadAnalytics() {
-    const { data: txns } = await sb.from('transactions').select('*');
-    const trendEl = document.getElementById('analytics-trend');
-    const catEl = document.getElementById('analytics-categories');
+    const now = new Date();
+    const periodMonths = parseInt(document.getElementById('analytics-period')?.value || '6', 10);
 
-    if (!txns || txns.length === 0) {
-      trendEl.innerHTML = `<div class="empty-state">No transactions yet.</div>`;
-      catEl.innerHTML = '';
-      return;
+    // Determine date range
+    let dateFrom;
+    if (periodMonths === 0) {
+      dateFrom = '2000-01-01'; // all time
+    } else if (periodMonths === 12) {
+      dateFrom = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10); // this year
+    } else {
+      dateFrom = new Date(now.getFullYear(), now.getMonth() - periodMonths + 1, 1).toISOString().slice(0, 10);
     }
 
-    // Last 6 months income vs expense
-    const now = new Date();
-    const months = [];
+    // Single query for all transactions in period — income and expense only for analytics
+    const { data: txns } = await sb.from('transactions').select('*').gte('txn_date', dateFrom);
+    const allTxns = txns || [];
+    const incomeTxns = allTxns.filter(t => t.type === 'income');
+    const expenseTxns = allTxns.filter(t => t.type === 'expense');
+    const totalIncome = incomeTxns.reduce((s, t) => s + Number(t.amount), 0);
+    const totalExpense = expenseTxns.reduce((s, t) => s + Number(t.amount), 0);
+    const netCashFlow = totalIncome - totalExpense;
+    const savingsRate = totalIncome > 0 ? (netCashFlow / totalIncome * 100).toFixed(1) : '—';
+
+    // Summary
+    const anIncome = document.getElementById('an-income');
+    const anExpense = document.getElementById('an-expense');
+    const anNet = document.getElementById('an-net');
+    const anSavings = document.getElementById('an-savings-rate');
+    if (anIncome) anIncome.textContent = fmtINR(totalIncome);
+    if (anExpense) anExpense.textContent = fmtINR(totalExpense);
+    if (anNet) { anNet.textContent = (netCashFlow >= 0 ? '+' : '') + fmtINR(netCashFlow); anNet.style.color = netCashFlow >= 0 ? 'var(--green)' : 'var(--red)'; }
+    if (anSavings) { anSavings.textContent = savingsRate !== '—' ? savingsRate + '%' : '—'; anSavings.style.color = parseFloat(savingsRate) > 0 ? 'var(--green)' : 'var(--red)'; }
+
+    // 6-month trend chart (always 6 months regardless of period filter — gives context)
+    const trendEl = document.getElementById('analytics-trend');
+    const trendMonths = [];
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      months.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: d.toLocaleString('default', { month: 'short' }) });
+      trendMonths.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: d.toLocaleString('default', { month: 'short' }) });
     }
-    const monthData = months.map(m => {
-      const inc = txns.filter(t => t.type === 'income' && t.txn_date.startsWith(m.key)).reduce((s, t) => s + Number(t.amount), 0);
-      const exp = txns.filter(t => t.type === 'expense' && t.txn_date.startsWith(m.key)).reduce((s, t) => s + Number(t.amount), 0);
-      return { ...m, inc, exp };
+    const { data: trendTxns } = await sb.from('transactions').select('type, amount, txn_date').gte('txn_date', trendMonths[0].key + '-01');
+    const trendData = trendMonths.map(m => {
+      const inc = (trendTxns || []).filter(t => t.type === 'income' && t.txn_date.startsWith(m.key)).reduce((s, t) => s + Number(t.amount), 0);
+      const exp = (trendTxns || []).filter(t => t.type === 'expense' && t.txn_date.startsWith(m.key)).reduce((s, t) => s + Number(t.amount), 0);
+      return { ...m, inc, exp, net: inc - exp };
     });
-    const maxVal = Math.max(...monthData.map(m => Math.max(m.inc, m.exp)), 1);
-
+    const maxVal = Math.max(...trendData.map(m => Math.max(m.inc, m.exp)), 1);
     trendEl.innerHTML = `
-      <div style="display:flex; gap:16px; align-items:flex-end; height:160px; padding:16px; background:var(--panel); border:1px solid var(--border);">
-        ${monthData.map(m => `
-          <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;">
-            <div style="display:flex; gap:3px; align-items:flex-end; height:110px;">
-              <div style="width:12px; background:var(--green); height:${(m.inc / maxVal * 100).toFixed(0)}%;" title="Income: ${fmtINR(m.inc)}"></div>
-              <div style="width:12px; background:var(--red); height:${(m.exp / maxVal * 100).toFixed(0)}%;" title="Expense: ${fmtINR(m.exp)}"></div>
-            </div>
-            <div style="font-size:10px; color:var(--text-dim);">${m.label}</div>
-          </div>
-        `).join('')}
-      </div>
-      <div style="font-size:10px; color:var(--text-dim); margin-top:8px;">
-        <span style="color:var(--green);">■</span> Income &nbsp; <span style="color:var(--red);">■</span> Expense
-      </div>
-    `;
+      <div style="background:var(--panel); border:1px solid var(--border); padding:16px;">
+        <div style="display:flex; gap:10px; align-items:flex-end; height:140px; margin-bottom:8px;">
+          ${trendData.map(m => `
+            <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:2px;">
+              <div style="display:flex; gap:2px; align-items:flex-end; height:110px;">
+                <div style="width:14px; background:var(--green); opacity:0.85; height:${Math.max(2,(m.inc/maxVal*100)).toFixed(0)}%;" title="Income ${fmtINR(m.inc)}"></div>
+                <div style="width:14px; background:var(--red); opacity:0.85; height:${Math.max(2,(m.exp/maxVal*100)).toFixed(0)}%;" title="Expense ${fmtINR(m.exp)}"></div>
+              </div>
+              <div style="font-size:10px; color:var(--text-dim);">${m.label}</div>
+              <div style="font-size:9px; color:${m.net>=0?'var(--green)':'var(--red)'};">${m.net>=0?'+':''}${fmtINR(m.net)}</div>
+            </div>`).join('')}
+        </div>
+        <div style="font-size:10px; color:var(--text-dim);"><span style="color:var(--green);">■</span> Income &nbsp;<span style="color:var(--red);">■</span> Expense</div>
+      </div>`;
 
-    // Category breakdown, all time, expenses only
+    // Expense categories with %
+    const catEl = document.getElementById('analytics-categories');
     const catTotals = {};
-    txns.filter(t => t.type === 'expense').forEach(t => { catTotals[t.category] = (catTotals[t.category] || 0) + Number(t.amount); });
-    const sorted = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
-    const catMax = sorted.length ? sorted[0][1] : 1;
+    expenseTxns.forEach(t => { catTotals[t.category] = (catTotals[t.category] || 0) + Number(t.amount); });
+    const sortedCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
+    const catMax = sortedCats.length ? sortedCats[0][1] : 1;
+    catEl.innerHTML = sortedCats.length ? sortedCats.map(([cat, amt]) => `
+      <div style="margin-bottom:8px;">
+        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:3px;">
+          <span>${cat}</span>
+          <span style="color:var(--red);">${fmtINR(amt)} <span style="color:var(--text-dim); font-size:10px;">(${totalExpense > 0 ? (amt/totalExpense*100).toFixed(0) : 0}%)</span></span>
+        </div>
+        <div style="background:var(--bg); border:1px solid var(--border); height:5px;">
+          <div style="background:var(--amber); height:100%; width:${(amt/catMax*100).toFixed(0)}%;"></div>
+        </div>
+      </div>`).join('') : `<div class="empty-state">No expenses in this period.</div>`;
 
-    catEl.innerHTML = sorted.length ? sorted.map(([cat, amt]) => `
-      <div style="margin-bottom:10px;">
-        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
-          <span>${cat}</span><span>${fmtINR(amt)}</span>
+    // Income categories with %
+    const incCatEl = document.getElementById('analytics-income-cats');
+    const incCatTotals = {};
+    incomeTxns.forEach(t => { incCatTotals[t.category] = (incCatTotals[t.category] || 0) + Number(t.amount); });
+    const sortedIncCats = Object.entries(incCatTotals).sort((a, b) => b[1] - a[1]);
+    const incCatMax = sortedIncCats.length ? sortedIncCats[0][1] : 1;
+    if (incCatEl) incCatEl.innerHTML = sortedIncCats.length ? sortedIncCats.map(([cat, amt]) => `
+      <div style="margin-bottom:8px;">
+        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:3px;">
+          <span>${cat}</span>
+          <span style="color:var(--green);">${fmtINR(amt)} <span style="color:var(--text-dim); font-size:10px;">(${totalIncome > 0 ? (amt/totalIncome*100).toFixed(0) : 0}%)</span></span>
         </div>
-        <div style="background:var(--bg); border:1px solid var(--border); height:6px;">
-          <div style="background:var(--amber); height:100%; width:${(amt / catMax * 100).toFixed(0)}%;"></div>
+        <div style="background:var(--bg); border:1px solid var(--border); height:5px;">
+          <div style="background:var(--green); opacity:0.7; height:100%; width:${(amt/incCatMax*100).toFixed(0)}%;"></div>
         </div>
+      </div>`).join('') : `<div class="empty-state">No income in this period.</div>`;
+
+    // Liability snapshot (always current, not period-filtered)
+    const { data: accs } = await sb.from('accounts').select('type, balance');
+    const { data: emiPend } = await sb.from('emi_schedule').select('principal_component, interest_component, gst_component').eq('payment_status', 'pending');
+    const { data: lns } = await sb.from('loans').select('type, balance').eq('is_closed', false);
+    const ccOwed = (accs || []).filter(a => a.type === 'credit_card').reduce((s, a) => s + Number(a.balance), 0);
+    const emiOut = (emiPend || []).reduce((s, r) => s + Number(r.principal_component), 0);
+    const emiInt = (emiPend || []).reduce((s, r) => s + Number(r.interest_component) + Number(r.gst_component), 0);
+    const creditors = (lns || []).filter(l => l.type === 'creditor').reduce((s, l) => s + Number(l.balance), 0);
+    const setEl = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = fmtINR(val); };
+    setEl('an-cc-owed', ccOwed); setEl('an-emi-out', emiOut); setEl('an-emi-interest', emiInt); setEl('an-creditors', creditors);
+
+    // Investment summary
+    const invEl = document.getElementById('analytics-investments');
+    const { data: invs } = await sb.from('investments').select('name, category').eq('uses_lot_tracking', true);
+    const { data: lots } = await sb.from('investment_lots').select('investment_id, quantity, price_per_unit');
+    const { data: sales } = await sb.from('investment_sales').select('investment_id, quantity_sold, cost_basis_removed, realized_pl');
+    const invMap = {};
+    (invs || []).forEach(i => { invMap[i.id] = { ...i, totalCost: 0, sold: 0, soldCost: 0, realizedPL: 0 }; });
+    (lots || []).forEach(l => { if (invMap[l.investment_id]) invMap[l.investment_id].totalCost += Number(l.quantity) * Number(l.price_per_unit); });
+    (sales || []).forEach(s => { if (invMap[s.investment_id]) { invMap[s.investment_id].soldCost += Number(s.cost_basis_removed); invMap[s.investment_id].realizedPL += Number(s.realized_pl); } });
+    const invRows = Object.values(invMap).filter(i => i.totalCost - i.soldCost > 0.01);
+    const totalInvested = invRows.reduce((s, i) => s + i.totalCost - i.soldCost, 0);
+    const totalRealizedPL = (sales || []).reduce((s, sale) => s + Number(sale.realized_pl), 0);
+    if (invEl) invEl.innerHTML = invRows.length ? `
+      <div class="summary-row" style="margin-bottom:12px;">
+        <div class="summary-cell"><div class="label">Total Invested (Cost)</div><div class="value amber">${fmtINR(totalInvested)}</div></div>
+        <div class="summary-cell"><div class="label">Holdings</div><div class="value">${invRows.length}</div></div>
+        <div class="summary-cell"><div class="label">Realized P&L</div><div class="value" style="color:${totalRealizedPL>=0?'var(--green)':'var(--red)'};">${totalRealizedPL>=0?'+':''}${fmtINR(totalRealizedPL)}</div></div>
       </div>
-    `).join('') : `<div class="empty-state">No expenses logged yet.</div>`;
+      ${invRows.map(i => {
+        const held = i.totalCost - i.soldCost;
+        return `<div class="txn-row" style="grid-template-columns: 1fr 100px 100px;">
+          <div><span class="txn-cat">${i.name}</span><span class="txn-note">${i.category}</span></div>
+          <div class="txn-account">${fmtINR(held)}</div>
+          <div class="txn-amount ${i.realizedPL>=0?'income':'expense'}">${i.realizedPL>=0?'+':''}${fmtINR(i.realizedPL)}</div>
+        </div>`;
+      }).join('')}` : `<div class="empty-state">No active investments.</div>`;
   }
 
   // ---------- REPORTS ----------
